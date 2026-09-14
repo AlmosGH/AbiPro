@@ -1,42 +1,136 @@
-# sv
+# Geschichte Érettségi Trainer
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A SvelteKit-based web app for preparing for the Hungarian **középszintű történelem érettségi** in German.
 
-## Creating a project
+The app focuses on the short-answer section of past exams and does not include essays.
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Features
 
-```sh
-# create a new project
-npx sv create my-app
-```
+### Aufgaben
 
-To recreate this project with the same configuration:
+Browse past exam tasks and filter them by:
 
-```sh
-# recreate this project
-npx sv@0.17.0 create --template minimal --types ts --add tailwindcss="plugins:none" sveltekit-adapter="adapter:auto" drizzle="database:postgresql+postgresql:postgres.js+docker:no" better-auth="demo:password" ai-tools="ide:vscode,other+tools:mcp,svelte-code-writer,svelte-core-bestpractices,svelte-file-editor+mcpSetup:remote" --install npm AbiPro
-```
+* Exam year/session
+* Historical period
+* Topic
+* NAT 2020 / 2012 / 2007
 
-## Developing
+### Üben
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+Practice a randomly selected task. Optionally focus on tasks you haven't practiced before, or 
 
-```sh
-npm run dev
+Answers are graded automatically:
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
+* Multiple choice, matching and similar questions use deterministic grading.
+* Open-text answers can be evaluated using AI against the official answer key and marking criteria.
 
-## Building
+### Prüfung
 
-To create a production version of your app:
+Take a simulated exam consisting of 12 randomly selected tasks.
 
-```sh
-npm run build
-```
+Includes:
 
-You can preview the production build with `npm run preview`.
+* Time limit
+* Autosaved answers
+* Automatic grading
+* Final score and detailed results
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## Accounts
+
+Users can create an account to save:
+
+* Practice attempts
+* Mock exam results
+* Answer history
+* Progress by historical period/topic
+
+## Tech Stack
+
+* **SvelteKit**
+* **TypeScript**
+* **Tailwind CSS**
+* **PostgreSQL / Supabase**
+* **Supabase Auth**
+* **Drizzle ORM**
+* **Zod**
+* **Gemini API** for semantic answer grading
+* **Vitest / Playwright**
+
+## Project Structure
+src/
+├── lib/
+│   ├── components/
+│   │   ├── task/
+│   │   ├── questions/
+│   │   └── admin/
+│   │
+│   ├── server/
+│   │   ├── db/
+│   │   ├── grading/
+│   │   ├── tasks/
+│   │   └── exams/
+│   │
+│   └── types/
+│
+├── routes/
+│   ├── (auth)/
+│   ├── (app)/
+│   │   ├── aufgaben/
+│   │   ├── uben/
+│   │   ├── prufung/
+│   │   └── profil/
+│   │
+│   └── admin/
+│       ├── aufgaben/
+│       ├── prufungen/
+│       ├── epochen/
+│       ├── themen/
+│       └── assets/
+│
+└── hooks.server.ts
+
+## Content Workflow
+
+Exam content is created and maintained through the admin CMS.
+
+Typical workflow:
+
+Create exam
+   ↓
+Create tasks
+   ↓
+Add sources and subquestions
+   ↓
+Configure grading
+   ↓
+Validate
+   ↓
+Preview
+   ↓
+Publish
+
+Tasks can have one of three states:
+
+draft
+published
+archived
+
+Only published tasks are visible in Aufgaben, Üben, and Prüfung.
+
+## Status
+
+Currently in development.
+
+The initial V1 aims to include:
+
+Authentication
+Historical exam database
+Aufgaben browser
+Practice mode
+Mock exam mode
+Automatic grading
+AI-assisted grading
+Progress statistics
+Admin CMS
+Draft and publishing workflow
+Asset management
