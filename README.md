@@ -56,16 +56,81 @@ Users can create an account to save:
 * **Gemini API** for semantic answer grading
 * **Vitest / Playwright**
 
+## Project Structure
+src/
+├── lib/
+│   ├── components/
+│   │   ├── task/
+│   │   ├── questions/
+│   │   └── admin/
+│   │
+│   ├── server/
+│   │   ├── db/
+│   │   ├── grading/
+│   │   ├── tasks/
+│   │   └── exams/
+│   │
+│   └── types/
+│
+├── routes/
+│   ├── (auth)/
+│   ├── (app)/
+│   │   ├── aufgaben/
+│   │   ├── uben/
+│   │   ├── prufung/
+│   │   └── profil/
+│   │
+│   └── admin/
+│       ├── aufgaben/
+│       ├── prufungen/
+│       ├── epochen/
+│       ├── themen/
+│       └── assets/
+│
+└── hooks.server.ts
+
+## Content Workflow
+
+Exam content is created and maintained through the admin CMS.
+
+Typical workflow:
+
+Create exam
+   ↓
+Create tasks
+   ↓
+Add sources and subquestions
+   ↓
+Configure grading
+   ↓
+Validate
+   ↓
+Preview
+   ↓
+Publish
+
+Tasks can have one of three states:
+
+draft
+published
+archived
+
+Only published tasks are visible in Aufgaben, Üben, and Prüfung.
+
 ## Status
 
 Currently in development.
 
-The initial goal is to build a working V1 with:
+The initial V1 aims to include:
 
-* Authentication
-* Historical exam database
-* Aufgaben browser
-* Practice mode
-* Mock exam mode
-* Automatic and AI-assisted grading
-* Basic progress statistics
+Authentication
+Historical exam database
+Aufgaben browser
+Practice mode
+Mock exam mode
+Automatic grading
+AI-assisted grading
+Progress statistics
+Admin CMS
+Draft and publishing workflow
+Asset management
