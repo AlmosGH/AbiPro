@@ -134,3 +134,68 @@ Progress statistics
 Admin CMS
 Draft and publishing workflow
 Asset management
+
+## Development Setup
+
+### Prerequisites
+
+* Node.js 24 (see `.nvmrc`)
+* npm
+* A hosted Supabase project
+
+Install the locked dependencies:
+
+```sh
+npm ci
+```
+
+Copy `.env.example` to `.env` and provide:
+
+* The project URL and publishable key from the Supabase Connect dialog
+* A transaction-pooler `DATABASE_URL` for the restricted `abipro_app` role
+* An owner `DATABASE_MIGRATION_URL` used only for migrations
+
+In Supabase Auth URL Configuration, add the local and deployed
+`/auth/callback` URLs to the redirect allow list. Email confirmation may be
+enabled or disabled; the registration flow supports both modes.
+
+### Database migrations
+
+The TypeScript Drizzle schema and committed SQL migrations are the database
+source of truth. Generate and review migrations before applying them:
+
+```sh
+npm run db:generate -- --name=describe_the_change
+npm run db:migrate
+```
+
+Do not use `drizzle-kit push` against the hosted project.
+
+The initial migration creates `abipro_app` without login access. After applying
+it, assign a generated password once through the Supabase SQL Editor without
+committing the password:
+
+```sql
+alter role abipro_app login password '<generated-password>';
+```
+
+Use that password only in the runtime `DATABASE_URL`. The owner connection must
+not be used by the running application.
+
+To promote the first administrator, update the matching profile from the SQL
+Editor:
+
+```sql
+update app_private.profiles
+set role = 'admin'
+where id = (select id from auth.users where email = 'admin@example.com');
+```
+
+### Run the app
+
+```sh
+npm run dev
+```
+
+The current UI intentionally contains only authentication and protected route
+placeholders. Run `npm run check` and `npm run build` before committing changes.

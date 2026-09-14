@@ -1,0 +1,7 @@
+import { redirect } from '@sveltejs/kit';
+import type { LayoutServerLoad } from './$types';
+
+export const load: LayoutServerLoad = ({ locals, url }) => {
+	if (!locals.userId || !locals.profile) redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
+	return { profile: locals.profile };
+};
