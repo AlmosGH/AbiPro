@@ -13,9 +13,12 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"test": "vitest run",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
-		"db:studio": "drizzle-kit studio"
+		"db:studio": "drizzle-kit studio",
+		"db:seed": "node --env-file=.env --experimental-strip-types scripts/seed-milestone-2.ts",
+		"db:seed:exam": "node --env-file=.env --experimental-strip-types scripts/seed-2026-may-german-history.ts"
 	},
 	"dependencies": {
 		"@supabase/ssr": "0.12.7",
@@ -35,6 +38,7 @@
 		"svelte-check": "^4.6.0",
 		"tailwindcss": "^4.3.0",
 		"typescript": "^6.0.3",
-		"vite": "^8.0.16"
+		"vite": "^8.0.16",
+		"vitest": "5.0.0"
 	}
 }

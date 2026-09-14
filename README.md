@@ -119,7 +119,10 @@ Only published tasks are visible in Aufgaben, Üben, and Prüfung.
 
 ## Status
 
-Currently in development.
+Currently in development. Milestones 1 through 3 are implemented: authentication and authorization,
+the versioned task-content workflow, the learner task browser, and a complete admin CMS with
+structured question/source editors, private asset management, validation, previews, revisions,
+publishing, archiving, and restoration.
 
 The initial V1 aims to include:
 
@@ -152,6 +155,7 @@ npm ci
 Copy `.env.example` to `.env` and provide:
 
 * The project URL and publishable key from the Supabase Connect dialog
+* A server-only Supabase secret key for private asset uploads and signed previews
 * A transaction-pooler `DATABASE_URL` for the restricted `abipro_app` role
 * An owner `DATABASE_MIGRATION_URL` used only for migrations
 
@@ -197,5 +201,24 @@ where id = (select id from auth.users where email = 'admin@example.com');
 npm run dev
 ```
 
-The current UI intentionally contains only authentication and protected route
-placeholders. Run `npm run check` and `npm run build` before committing changes.
+The interface intentionally uses only a light, basic presentation layer so it can be restyled later.
+Run `npm test`, `npm run check`, and `npm run build` before committing changes.
+
+To create three draft templates that exercise all supported question types, run:
+
+```sh
+npm run db:seed
+```
+
+The templates deliberately contain placeholder content and remain drafts. An administrator must
+replace that content with verified exam material before publishing it through the CMS.
+
+To idempotently import the 12 short-answer exercises from the German-language May 2026 history
+exam as draft test data, run:
+
+```sh
+npm run db:seed:exam
+```
+
+The import uses the official marking guide for answer rules. It deliberately excludes every essay
+exercise and keeps the imported records in draft status for editorial review.
