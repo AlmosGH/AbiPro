@@ -6,6 +6,7 @@ import {
 	taskVersions, topics
 } from '$lib/server/db/schema';
 import type { z } from 'zod';
+import { learnerQuestionSelection, toLearnerQuestion } from './learner-content';
 import type { questionDraftSchema, sourceDraftSchema, taskMetadataSchema } from './content-validation';
 import { questionDraftSchema as questionSchema, sourceDraftSchema as sourceSchema, validatePointTotal } from './content-validation';
 import { newestUpdatedFirst } from './sorting';
@@ -320,8 +321,8 @@ export async function getPublishedTask(slug: string) {
 	const [sourceRows, questionRows, topicRows] = await Promise.all([
 		db.select({ id: sources.id, taskVersionId: sources.taskVersionId, position: sources.position, kind: sources.kind, title: sources.title, content: sources.content, assetId: sources.assetId, createdAt: sources.createdAt, updatedAt: sources.updatedAt, assetPath: assets.path, assetMimeType: assets.mimeType, assetAltText: assets.altText })
 			.from(sources).leftJoin(assets, eq(assets.id, sources.assetId)).where(eq(sources.taskVersionId, task.versionId)).orderBy(asc(sources.position)),
-		db.select().from(questions).where(eq(questions.taskVersionId, task.versionId)).orderBy(asc(questions.position)),
+		db.select(learnerQuestionSelection).from(questions).where(eq(questions.taskVersionId, task.versionId)).orderBy(asc(questions.position)),
 		db.select({ name: topics.name }).from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId)).where(eq(taskVersionTopics.taskVersionId, task.versionId)).orderBy(asc(topics.name))
 	]);
-	return { ...task, sources: sourceRows, questions: questionRows, topics: topicRows.map((row) => row.name) };
+	return { ...task, sources: sourceRows, questions: questionRows.map(toLearnerQuestion), topics: topicRows.map((row) => row.name) };
 }

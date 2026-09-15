@@ -12,6 +12,9 @@ node_modules
 .DS_Store
 Thumbs.db
 /tmp
+/test-results
+/playwright-report
+/blob-report
 
 # Env
 .env

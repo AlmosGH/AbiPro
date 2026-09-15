@@ -122,7 +122,8 @@ Only published tasks are visible in Aufgaben, Üben, and Prüfung.
 Currently in development. Milestones 1 through 3 are implemented: authentication and authorization,
 the versioned task-content workflow, the learner task browser, and a complete admin CMS with
 structured question/source editors, private asset management, validation, previews, revisions,
-publishing, archiving, and restoration.
+publishing, archiving, and restoration. Milestone 3.1 adds a learner-safe content boundary,
+shared read-only task rendering, and an authenticated browser-test scaffold.
 
 The initial V1 aims to include:
 
@@ -203,6 +204,16 @@ npm run dev
 
 The interface intentionally uses only a light, basic presentation layer so it can be restyled later.
 Run `npm test`, `npm run check`, and `npm run build` before committing changes.
+
+The authenticated Playwright smoke test uses a dedicated learner account. Install Chromium once,
+set `E2E_USER_EMAIL` and `E2E_USER_PASSWORD`, then run:
+
+```sh
+npx playwright install chromium
+npm run test:e2e
+```
+
+Set `E2E_BASE_URL` to test an already running deployment instead of starting the local preview server.
 
 To create three draft templates that exercise all supported question types, run:
 
