@@ -276,16 +276,14 @@ export async function getMockExamAttempt(userId: string, attemptId: number) {
 		.where(eq(attemptTasks.attemptId, attemptId)).orderBy(asc(attemptTasks.position));
 	const versionIds = taskRows.map((row) => row.taskVersionId);
 	const attemptTaskIds = taskRows.map((row) => row.attemptTaskId);
-	const [sourceRows, questionRows, answerRows, topicRows] = await Promise.all([
-		db.select({ id: sources.id, taskVersionId: sources.taskVersionId, position: sources.position, kind: sources.kind, title: sources.title, content: sources.content, assetPath: assets.path, assetAltText: assets.altText })
-			.from(sources).leftJoin(assets, eq(assets.id, sources.assetId)).where(inArray(sources.taskVersionId, versionIds)).orderBy(asc(sources.position)),
-		db.select({ ...learnerQuestionSelection, taskVersionId: questions.taskVersionId }).from(questions).where(inArray(questions.taskVersionId, versionIds)).orderBy(asc(questions.position)),
-		db.select({ id: attemptAnswers.id, questionId: attemptAnswers.questionId, attemptTaskId: attemptAnswers.attemptTaskId, response: attemptAnswers.response, lastSavedAt: attemptAnswers.lastSavedAt, status: attemptAnswers.status, awardedPoints: attemptAnswers.awardedPoints, feedback: attemptAnswers.feedback })
+	const sourceRows = await db.select({ id: sources.id, taskVersionId: sources.taskVersionId, position: sources.position, kind: sources.kind, title: sources.title, content: sources.content, assetPath: assets.path, assetAltText: assets.altText })
+			.from(sources).leftJoin(assets, eq(assets.id, sources.assetId)).where(inArray(sources.taskVersionId, versionIds)).orderBy(asc(sources.position));
+	const questionRows = await db.select({ ...learnerQuestionSelection, taskVersionId: questions.taskVersionId }).from(questions).where(inArray(questions.taskVersionId, versionIds)).orderBy(asc(questions.position));
+	const answerRows = await db.select({ id: attemptAnswers.id, questionId: attemptAnswers.questionId, attemptTaskId: attemptAnswers.attemptTaskId, response: attemptAnswers.response, lastSavedAt: attemptAnswers.lastSavedAt, status: attemptAnswers.status, awardedPoints: attemptAnswers.awardedPoints, feedback: attemptAnswers.feedback })
 			.from(attemptAnswers)
-			.where(inArray(attemptAnswers.attemptTaskId, attemptTaskIds)),
-		db.select({ taskVersionId: taskVersionTopics.taskVersionId, name: topics.name }).from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId))
-			.where(inArray(taskVersionTopics.taskVersionId, versionIds)).orderBy(asc(topics.name))
-	]);
+			.where(inArray(attemptAnswers.attemptTaskId, attemptTaskIds));
+	const topicRows = await db.select({ taskVersionId: taskVersionTopics.taskVersionId, name: topics.name }).from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId))
+			.where(inArray(taskVersionTopics.taskVersionId, versionIds)).orderBy(asc(topics.name));
 	const submitted = attempt.status !== 'in_progress';
 	return {
 		...attempt,

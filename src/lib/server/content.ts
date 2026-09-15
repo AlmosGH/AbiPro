@@ -21,12 +21,10 @@ function assertAdmin(actor: Actor) {
 
 export async function getReferenceData() {
 	const db = getDb();
-	const [curriculumRows, periodRows, topicRows, sessionRows] = await Promise.all([
-		db.select().from(curricula).orderBy(asc(curricula.name)),
-		db.select().from(historicalPeriods).orderBy(asc(historicalPeriods.position), asc(historicalPeriods.name)),
-		db.select().from(topics).orderBy(asc(topics.name)),
-		db.select().from(examSessions).orderBy(desc(examSessions.year), asc(examSessions.session))
-	]);
+	const curriculumRows = await db.select().from(curricula).orderBy(asc(curricula.name));
+	const periodRows = await db.select().from(historicalPeriods).orderBy(asc(historicalPeriods.position), asc(historicalPeriods.name));
+	const topicRows = await db.select().from(topics).orderBy(asc(topics.name));
+	const sessionRows = await db.select().from(examSessions).orderBy(desc(examSessions.year), asc(examSessions.session));
 	return { curricula: curriculumRows, periods: periodRows, topics: topicRows, sessions: sessionRows };
 }
 
@@ -95,11 +93,9 @@ export async function getAdminTaskVersion(id: number) {
 		examPosition: taskVersions.examPosition, maxPoints: taskVersions.maxPoints, publishedAt: taskVersions.publishedAt
 	}).from(taskVersions).innerJoin(tasks, eq(tasks.id, taskVersions.taskId)).where(eq(taskVersions.id, id));
 	if (!version) return null;
-	const [sourceRows, questionRows, topicRows] = await Promise.all([
-		db.select().from(sources).where(eq(sources.taskVersionId, id)).orderBy(asc(sources.position)),
-		db.select().from(questions).where(eq(questions.taskVersionId, id)).orderBy(asc(questions.position)),
-		db.select({ topicId: taskVersionTopics.topicId }).from(taskVersionTopics).where(eq(taskVersionTopics.taskVersionId, id))
-	]);
+	const sourceRows = await db.select().from(sources).where(eq(sources.taskVersionId, id)).orderBy(asc(sources.position));
+	const questionRows = await db.select().from(questions).where(eq(questions.taskVersionId, id)).orderBy(asc(questions.position));
+	const topicRows = await db.select({ topicId: taskVersionTopics.topicId }).from(taskVersionTopics).where(eq(taskVersionTopics.taskVersionId, id));
 	return { ...version, sources: sourceRows, questions: questionRows, topicIds: topicRows.map((row) => row.topicId) };
 }
 
@@ -137,11 +133,9 @@ export async function publishTaskVersion(actor: Actor, id: number) {
 		const [version] = await transaction.select().from(taskVersions).where(eq(taskVersions.id, id)).for('update');
 		if (!version) throw new Error('Aufgabenversion nicht gefunden.');
 		if (version.status !== 'draft') throw new Error('Nur Entwürfe können veröffentlicht werden.');
-		const [sourceRows, questionRows, topicRows] = await Promise.all([
-			transaction.select().from(sources).where(eq(sources.taskVersionId, id)),
-			transaction.select().from(questions).where(eq(questions.taskVersionId, id)),
-			transaction.select().from(taskVersionTopics).where(eq(taskVersionTopics.taskVersionId, id))
-		]);
+		const sourceRows = await transaction.select().from(sources).where(eq(sources.taskVersionId, id));
+		const questionRows = await transaction.select().from(questions).where(eq(questions.taskVersionId, id));
+		const topicRows = await transaction.select().from(taskVersionTopics).where(eq(taskVersionTopics.taskVersionId, id));
 		if (!sourceRows.length || !questionRows.length || !topicRows.length) throw new Error('Eine veröffentlichte Aufgabe benötigt mindestens eine Quelle, eine Frage und ein Thema.');
 		for (const source of sourceRows) sourceSchema.parse(source);
 		for (const question of questionRows) questionSchema.parse(question);
@@ -173,11 +167,9 @@ export async function createDraftRevision(actor: Actor, sourceVersionId: number)
 			examSessionId: sourceVersion.examSessionId, examPosition: sourceVersion.examPosition, maxPoints: sourceVersion.maxPoints,
 			createdBy: actor.userId
 		}).returning({ id: taskVersions.id });
-		const [sourceRows, questionRows, topicRows] = await Promise.all([
-			transaction.select().from(sources).where(eq(sources.taskVersionId, sourceVersionId)).orderBy(asc(sources.position)),
-			transaction.select().from(questions).where(eq(questions.taskVersionId, sourceVersionId)).orderBy(asc(questions.position)),
-			transaction.select().from(taskVersionTopics).where(eq(taskVersionTopics.taskVersionId, sourceVersionId))
-		]);
+		const sourceRows = await transaction.select().from(sources).where(eq(sources.taskVersionId, sourceVersionId)).orderBy(asc(sources.position));
+		const questionRows = await transaction.select().from(questions).where(eq(questions.taskVersionId, sourceVersionId)).orderBy(asc(questions.position));
+		const topicRows = await transaction.select().from(taskVersionTopics).where(eq(taskVersionTopics.taskVersionId, sourceVersionId));
 		if (sourceRows.length) await transaction.insert(sources).values(sourceRows.map(({ id: _id, createdAt: _created, updatedAt: _updated, ...row }) => ({ ...row, taskVersionId: draft.id })));
 		if (questionRows.length) await transaction.insert(questions).values(questionRows.map(({ id: _id, createdAt: _created, updatedAt: _updated, ...row }) => ({ ...row, taskVersionId: draft.id })));
 		if (topicRows.length) await transaction.insert(taskVersionTopics).values(topicRows.map((row) => ({ taskVersionId: draft.id, topicId: row.topicId })));
@@ -222,7 +214,10 @@ export async function getTaskValidationIssues(id: number) {
 export async function getAdminDashboard() {
 	const allTasks = await listAdminTasks();
 	const drafts = allTasks.filter((task) => task.versionStatus === 'draft');
-	const draftChecks = await Promise.all(drafts.map(async (task) => ({ ...task, issues: await getTaskValidationIssues(task.versionId) })));
+	const draftChecks: Array<(typeof drafts)[number] & { issues: string[] }> = [];
+	for (const task of drafts) {
+		draftChecks.push({ ...task, issues: await getTaskValidationIssues(task.versionId) });
+	}
 	return {
 		counts: {
 			total: allTasks.length,
@@ -318,11 +313,9 @@ export async function getPublishedTask(slug: string) {
 		.innerJoin(examSessions, eq(examSessions.id, taskVersions.examSessionId))
 		.where(and(eq(tasks.slug, slug), eq(taskVersions.status, 'published')));
 	if (!task) return null;
-	const [sourceRows, questionRows, topicRows] = await Promise.all([
-		db.select({ id: sources.id, taskVersionId: sources.taskVersionId, position: sources.position, kind: sources.kind, title: sources.title, content: sources.content, assetId: sources.assetId, createdAt: sources.createdAt, updatedAt: sources.updatedAt, assetPath: assets.path, assetMimeType: assets.mimeType, assetAltText: assets.altText })
-			.from(sources).leftJoin(assets, eq(assets.id, sources.assetId)).where(eq(sources.taskVersionId, task.versionId)).orderBy(asc(sources.position)),
-		db.select(learnerQuestionSelection).from(questions).where(eq(questions.taskVersionId, task.versionId)).orderBy(asc(questions.position)),
-		db.select({ name: topics.name }).from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId)).where(eq(taskVersionTopics.taskVersionId, task.versionId)).orderBy(asc(topics.name))
-	]);
+	const sourceRows = await db.select({ id: sources.id, taskVersionId: sources.taskVersionId, position: sources.position, kind: sources.kind, title: sources.title, content: sources.content, assetId: sources.assetId, createdAt: sources.createdAt, updatedAt: sources.updatedAt, assetPath: assets.path, assetMimeType: assets.mimeType, assetAltText: assets.altText })
+		.from(sources).leftJoin(assets, eq(assets.id, sources.assetId)).where(eq(sources.taskVersionId, task.versionId)).orderBy(asc(sources.position));
+	const questionRows = await db.select(learnerQuestionSelection).from(questions).where(eq(questions.taskVersionId, task.versionId)).orderBy(asc(questions.position));
+	const topicRows = await db.select({ name: topics.name }).from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId)).where(eq(taskVersionTopics.taskVersionId, task.versionId)).orderBy(asc(topics.name));
 	return { ...task, sources: sourceRows, questions: questionRows.map(toLearnerQuestion), topics: topicRows.map((row) => row.name) };
 }

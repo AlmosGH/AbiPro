@@ -7,10 +7,8 @@ import { enforceRateLimit } from '$lib/server/rate-limit';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const actor = requireActor(locals, `/login?next=${encodeURIComponent(url.pathname)}`);
-	const [readiness, activeAttempt] = await Promise.all([
-		getMockExamReadiness(),
-		getActiveMockExam(actor.userId)
-	]);
+	const readiness = await getMockExamReadiness();
+	const activeAttempt = await getActiveMockExam(actor.userId);
 	return { config: MOCK_EXAM_CONFIG, readiness, activeAttempt };
 };
 

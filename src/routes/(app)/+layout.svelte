@@ -9,7 +9,6 @@
 <header class="app-header">
 	<div class="header-main">
 		<a class="brand" href="/profil" aria-label="AbiPro Startseite">
-			<span class="brand-mark" aria-hidden="true">A</span>
 			<span><strong>Abi<span>Pro</span></strong><small>Geschichte · Mittelstufe</small></span>
 		</a>
 		<button class="menu-button" type="button" aria-label="Navigation öffnen" aria-expanded={menuOpen} onclick={() => menuOpen = !menuOpen}>
@@ -28,10 +27,7 @@
 			<form method="POST" action="/logout"><button class="logout" type="submit">Abmelden</button></form>
 		</div>
 	</div>
-	<div class="archive-strip">
-		<span><b>✦ Maturafokus 2026</b> · Frühneuzeit, Quellenarbeit &amp; Prüfungstraining</span>
-		<em>„Historia est magistra vitae.“</em>
-	</div>
+
 </header>
 
 {@render children()}

@@ -19,7 +19,10 @@ function validateFile(value: FormDataEntryValue | null) {
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
 	const rows = await listAssetRecords();
-	const assetRows = await Promise.all(rows.map(async (asset) => ({ ...asset, signedUrl: await createAssetSignedUrl(asset.path) })));
+	const assetRows = [];
+	for (const asset of rows) {
+		assetRows.push({ ...asset, signedUrl: await createAssetSignedUrl(asset.path) });
+	}
 	return { assets: assetRows, storageConfigured: assetRows.length === 0 || assetRows.some((asset) => asset.signedUrl !== null) };
 };
 

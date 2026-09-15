@@ -17,7 +17,7 @@ export const load: PageServerLoad = ({ locals, url }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, locals }) => {
+	email: async ({ request, locals }) => {
 		const values = Object.fromEntries(await request.formData());
 		const email = typeof values.email === 'string' ? values.email : '';
 		const parsed = loginSchema.safeParse(values);
@@ -26,5 +26,19 @@ export const actions: Actions = {
 		const { error } = await locals.supabase.auth.signInWithPassword({ email: parsed.data.email, password: parsed.data.password });
 		if (error) return fail(400, { message: 'E-Mail-Adresse oder Passwort ist ungültig.', email: parsed.data.email });
 		redirect(303, safeNext(parsed.data.next));
+	},
+	google: async ({ request, locals, url }) => {
+		const values = Object.fromEntries(await request.formData());
+		const next = safeNext(typeof values.next === 'string' ? values.next : undefined);
+		const callback = new URL('/auth/callback', url.origin);
+		callback.searchParams.set('next', next);
+		const { data, error } = await locals.supabase.auth.signInWithOAuth({
+			provider: 'google',
+			options: { redirectTo: callback.toString() }
+		});
+		if (error || !data.url) {
+			return fail(503, { message: 'Die Anmeldung mit Google ist derzeit nicht verfügbar.' });
+		}
+		redirect(303, data.url);
 	}
 };

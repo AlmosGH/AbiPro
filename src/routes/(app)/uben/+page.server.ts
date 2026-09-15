@@ -10,10 +10,8 @@ const optionalId = z.preprocess((value) => value === '' || value === null ? unde
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const actor = requireActor(locals, `/login?next=${encodeURIComponent(url.pathname + url.search)}`);
-	const [references, resumableAttempts] = await Promise.all([
-		getReferenceData(),
-		listResumablePracticeAttempts(actor.userId)
-	]);
+	const references = await getReferenceData();
+	const resumableAttempts = await listResumablePracticeAttempts(actor.userId);
 	return {
 		...references,
 		resumableAttempts,

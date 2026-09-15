@@ -104,22 +104,20 @@ export async function getPracticeAttempt(userId: string, attemptId: number) {
 		.where(and(eq(assessmentAttempts.id, attemptId), eq(assessmentAttempts.userId, userId), eq(assessmentAttempts.kind, 'practice')));
 	if (!attempt) return null;
 
-	const [sourceRows, questionRows, answerRows, topicRows] = await Promise.all([
-		db.select({
+	const sourceRows = await db.select({
 			id: sources.id, position: sources.position, kind: sources.kind, title: sources.title, content: sources.content,
 			assetPath: assets.path, assetAltText: assets.altText
 		}).from(sources).leftJoin(assets, eq(assets.id, sources.assetId))
-			.where(eq(sources.taskVersionId, attempt.taskVersionId)).orderBy(asc(sources.position)),
-		db.select(learnerQuestionSelection).from(questions).where(eq(questions.taskVersionId, attempt.taskVersionId)).orderBy(asc(questions.position)),
-		db.select({
+			.where(eq(sources.taskVersionId, attempt.taskVersionId)).orderBy(asc(sources.position));
+	const questionRows = await db.select(learnerQuestionSelection).from(questions).where(eq(questions.taskVersionId, attempt.taskVersionId)).orderBy(asc(questions.position));
+	const answerRows = await db.select({
 			id: attemptAnswers.id, questionId: attemptAnswers.questionId, response: attemptAnswers.response, lastSavedAt: attemptAnswers.lastSavedAt,
 			status: attemptAnswers.status,
 			awardedPoints: attemptAnswers.awardedPoints, feedback: attemptAnswers.feedback,
 		}).from(attemptAnswers)
-			.where(eq(attemptAnswers.attemptTaskId, attempt.attemptTaskId)),
-		db.select({ name: topics.name }).from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId))
-			.where(eq(taskVersionTopics.taskVersionId, attempt.taskVersionId)).orderBy(asc(topics.name))
-	]);
+			.where(eq(attemptAnswers.attemptTaskId, attempt.attemptTaskId));
+	const topicRows = await db.select({ name: topics.name }).from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId))
+			.where(eq(taskVersionTopics.taskVersionId, attempt.taskVersionId)).orderBy(asc(topics.name));
 	const isSubmitted = attempt.status !== 'in_progress';
 	return {
 		...attempt,

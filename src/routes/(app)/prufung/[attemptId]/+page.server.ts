@@ -15,13 +15,14 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!parsedId.success) error(404, 'Prüfungsversuch nicht gefunden.');
 	const attempt = await getMockExamAttempt(actor.userId, parsedId.data);
 	if (!attempt) error(404, 'Prüfungsversuch nicht gefunden.');
-	const examTasks = await Promise.all(attempt.tasks.map(async (task) => ({
-		...task,
-		sources: await Promise.all(task.sources.map(async ({ assetPath, ...source }) => ({
-			...source,
-			assetUrl: assetPath ? await createAssetSignedUrl(assetPath) : null
-		})))
-	})));
+	const examTasks = [];
+	for (const task of attempt.tasks) {
+		const sources = [];
+		for (const { assetPath, ...source } of task.sources) {
+			sources.push({ ...source, assetUrl: assetPath ? await createAssetSignedUrl(assetPath) : null });
+		}
+		examTasks.push({ ...task, sources });
+	}
 	return { attempt: { ...attempt, tasks: examTasks } };
 };
 

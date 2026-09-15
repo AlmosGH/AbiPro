@@ -23,6 +23,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		year: optionalId(url.searchParams.get('year')),
 		session
 	};
-	const [taskRows, references, practiced] = await Promise.all([listPublishedTasks(filters), getReferenceData(), getPracticedTaskVersionIds(actor.userId)]);
+	const taskRows = await listPublishedTasks(filters);
+	const references = await getReferenceData();
+	const practiced = await getPracticedTaskVersionIds(actor.userId);
 	return { tasks: taskRows.map((task) => ({ ...task, practiced: practiced.has(task.taskVersionId) })), filters, ...references };
 };

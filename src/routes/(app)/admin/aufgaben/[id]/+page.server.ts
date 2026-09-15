@@ -10,7 +10,6 @@ const idSchema = z.coerce.number().int().positive();
 const editableMetadataSchema = taskMetadataSchema.omit({ slug: true });
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	console.log('load', params.id);
 	requireAdmin(locals);
 	const id = idSchema.safeParse(params.id);
 	if (!id.success) error(404, 'Aufgabe nicht gefunden.');
@@ -21,7 +20,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const assetRecords = await listAssetRecords();
 
 	if (!task) error(404, 'Aufgabe nicht gefunden.');
-	const assets = await Promise.all(assetRecords.map(async (asset) => ({ ...asset, signedUrl: await createAssetSignedUrl(asset.path) })));
+	const assets = [];
+	for (const asset of assetRecords) {
+		assets.push({ ...asset, signedUrl: await createAssetSignedUrl(asset.path) });
+	}
 	return { task, assets, ...references };
 };
 

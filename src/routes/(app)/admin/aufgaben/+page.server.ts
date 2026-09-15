@@ -13,7 +13,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const statusValue = url.searchParams.get('status');
 	const status: 'draft' | 'published' | 'archived' | undefined = statusValue === 'draft' || statusValue === 'published' || statusValue === 'archived' ? statusValue : undefined;
 	const filters = { query: url.searchParams.get('q')?.trim() || undefined, status, curriculumId: optionalId(url.searchParams.get('curriculumId')), periodId: optionalId(url.searchParams.get('periodId')), topicId: optionalId(url.searchParams.get('topicId')), year: optionalId(url.searchParams.get('year')) };
-	const [references, taskVersions] = await Promise.all([getReferenceData(), listFilteredAdminTasks(filters)]);
+	const references = await getReferenceData();
+	const taskVersions = await listFilteredAdminTasks(filters);
 	return { ...references, taskVersions, filters };
 };
 

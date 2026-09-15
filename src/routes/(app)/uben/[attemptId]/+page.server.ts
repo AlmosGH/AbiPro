@@ -15,13 +15,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!parsedId.success) error(404, 'Übungsversuch nicht gefunden.');
 	const attempt = await getPracticeAttempt(actor.userId, parsedId.data);
 	if (!attempt) error(404, 'Übungsversuch nicht gefunden.');
-	const [sources, bestAttempt] = await Promise.all([
-		Promise.all(attempt.sources.map(async ({ assetPath, ...source }) => ({
-			...source,
-			assetUrl: assetPath ? await createAssetSignedUrl(assetPath) : null
-		}))),
-		getBestPracticeScore(actor.userId, attempt.taskVersionId)
-	]);
+	const sources = [];
+	for (const { assetPath, ...source } of attempt.sources) {
+		sources.push({ ...source, assetUrl: assetPath ? await createAssetSignedUrl(assetPath) : null });
+	}
+	const bestAttempt = await getBestPracticeScore(actor.userId, attempt.taskVersionId);
 	return { attempt: { ...attempt, sources }, bestAttempt };
 };
 
