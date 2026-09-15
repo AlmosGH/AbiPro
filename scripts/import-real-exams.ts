@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import postgres from 'postgres';
 import { createClient } from '@supabase/supabase-js';
@@ -58,11 +58,29 @@ async function uploadTaskImages(exam: PreparedExam, task: PreparedTask) {
 }
 
 const work = manifest.exams.flatMap((exam) => exam.tasks.map((task) => ({ exam, task })));
+
+console.log(`Verifying image assets on disk for ${work.length} tasks...`);
+const missingOnDisk: string[] = [];
+for (const { task } of work) {
+	for (const localPath of task.imagePaths) {
+		try {
+			await stat(join(importRoot, 'images', localPath));
+		} catch {
+			missingOnDisk.push(localPath);
+		}
+	}
+}
+if (missingOnDisk.length > 0) {
+	throw new Error(`Missing ${missingOnDisk.length} image files on disk: ${missingOnDisk.slice(0, 5).join(', ')}...`);
+}
+console.log('All image assets verified on disk.');
+
 const uploadedTasks: Awaited<ReturnType<typeof uploadTaskImages>>[] = [];
-for (let index = 0; index < work.length; index += 4) {
-	uploadedTasks.push(...await Promise.all(work.slice(index, index + 4).map(({ exam, task }) => uploadTaskImages(exam, task))));
-	if ((index + 4) % 48 === 0 || index + 4 >= work.length) {
-		console.log(`Uploaded ${Math.min(index + 4, work.length)}/${work.length} task image sets.`);
+const BATCH_SIZE = 8;
+for (let index = 0; index < work.length; index += BATCH_SIZE) {
+	uploadedTasks.push(...await Promise.all(work.slice(index, index + BATCH_SIZE).map(({ exam, task }) => uploadTaskImages(exam, task))));
+	if ((index + BATCH_SIZE) % 48 === 0 || index + BATCH_SIZE >= work.length) {
+		console.log(`Uploaded ${Math.min(index + BATCH_SIZE, work.length)}/${work.length} task image sets.`);
 	}
 }
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import re
 import unicodedata
@@ -11,8 +12,8 @@ import pdfplumber
 
 
 TASK_HEADING = re.compile(r"(?m)^\s*(1[0-2]|[1-9])\.\s*([^\n]+)")
-POINTS = re.compile(r"(\d+(?:[,.]\d+)?)\s+Punkt", re.IGNORECASE)
-TOTAL_POINTS = re.compile(r"insgesamt\s*:?[ ]*(\d+(?:[,.]\d+)?)\s+Punkt", re.IGNORECASE)
+POINTS = re.compile(r"(\d+(?:[,.]\d+)?)\s+(?:Punkt|pont)", re.IGNORECASE)
+TOTAL_POINTS = re.compile(r"insgesamt\s*:?[ ]*(\d+(?:[,.]\d+)?)\s+(?:Punkt|pont)", re.IGNORECASE)
 ESSAYS = re.compile(r"(?im)^\s*II\.\s+(?:ESSAYS|AUFS[ÄA]TZE)")
 
 
@@ -59,7 +60,7 @@ def sequential_markers(pdf: pdfplumber.PDF) -> list[Marker]:
     return markers
 
 
-def text_blocks(pdf: pdfplumber.PDF) -> dict[int, tuple[str, str, int]]:
+def text_blocks(pdf: pdfplumber.PDF) -> dict[int, tuple[str, str, float]]:
     text = "\n".join(page.extract_text() or "" for page in pdf.pages)
     essay = ESSAYS.search(text)
     if essay:
@@ -76,7 +77,7 @@ def text_blocks(pdf: pdfplumber.PDF) -> dict[int, tuple[str, str, int]]:
             raise ValueError(f"answer heading {number} not found")
         selected.append(match)
         cursor = match.end()
-    result: dict[int, tuple[str, str, int]] = {}
+    result: dict[int, tuple[str, str, float]] = {}
     for index, match in enumerate(selected):
         end = selected[index + 1].start() if index + 1 < len(selected) else len(text)
         block = clean(text[match.start():end])
@@ -101,7 +102,7 @@ def curriculum(year: int) -> tuple[str, str]:
     return "NAT_2007", "NAT 2007"
 
 
-def prepare_exam(folder: Path, output_root: Path, render: bool) -> dict:
+def prepare_exam(folder: Path, output_root: Path, render: bool, force: bool = False) -> dict:
     year_text, session_text = folder.name.split("_", 1)
     year = int(year_text)
     session = "spring" if session_text == "tavasz" else "autumn"
@@ -130,9 +131,11 @@ def prepare_exam(folder: Path, output_root: Path, render: bool) -> dict:
                 relative = Path(folder.name) / f"task-{marker.number:02d}-part-{len(image_paths) + 1}.webp"
                 image_paths.append(relative.as_posix())
                 if render:
-                    cropped = page.crop((24, max(0, top), page.width - 24, min(page.height, bottom)))
-                    image = cropped.to_image(resolution=150, antialias=True).original.convert("RGB")
-                    image.save(output_root / relative, "WEBP", quality=86, method=6)
+                    target_file = output_root / relative
+                    if force or not (target_file.exists() and target_file.stat().st_size > 0):
+                        cropped = page.crop((24, max(0, top), page.width - 24, min(page.height, bottom)))
+                        image = cropped.to_image(resolution=150, antialias=True).original.convert("RGB")
+                        image.save(target_file, "WEBP", quality=86, method=6)
             answer_title, rubric, maximum = answers[marker.number]
             title = answer_title or marker.title
             code, code_name = curriculum(year)
@@ -146,6 +149,11 @@ def prepare_exam(folder: Path, output_root: Path, render: bool) -> dict:
                 "imagePaths": image_paths,
                 "rubric": rubric,
             })
+        if render:
+            expected_names = {Path(p).name for task in tasks for p in task["imagePaths"]}
+            for extra in out_dir.glob("*.webp"):
+                if extra.name not in expected_names:
+                    extra.unlink()
         return {"year": year, "session": session, "sourceFolder": folder.name, "tasks": tasks}
     finally:
         exam_pdf.close()
@@ -157,20 +165,26 @@ def main() -> None:
     parser.add_argument("--source", type=Path, default=Path("erettsegik_2006_2026"))
     parser.add_argument("--output", type=Path, default=Path("tmp/real-exam-import"))
     parser.add_argument("--render", action="store_true")
+    parser.add_argument("--force", action="store_true", help="Force re-rendering even if images exist")
     args = parser.parse_args()
+
+    folders = sorted(path for path in args.source.iterdir() if path.is_dir())
     exams = []
     failures = []
-    for folder in sorted(path for path in args.source.iterdir() if path.is_dir()):
+
+    for folder in folders:
         try:
-            exams.append(prepare_exam(folder, args.output / "images", args.render))
-            print(f"OK {folder.name}")
+            exam_data = prepare_exam(folder, args.output / "images", args.render, args.force)
+            exams.append(exam_data)
+            print(f"OK {folder.name}", flush=True)
         except Exception as error:
             failures.append({"folder": folder.name, "error": str(error)})
-            print(f"FAIL {folder.name}: {error}")
+            print(f"FAIL {folder.name}: {error}", flush=True)
+
     args.output.mkdir(parents=True, exist_ok=True)
     manifest = {"exams": exams, "failures": failures}
     (args.output / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Prepared {len(exams)} exams and {sum(len(exam['tasks']) for exam in exams)} tasks; failures={len(failures)}")
+    print(f"Prepared {len(exams)} exams and {sum(len(exam['tasks']) for exam in exams)} tasks; failures={len(failures)}", flush=True)
     if failures:
         raise SystemExit(1)
 
