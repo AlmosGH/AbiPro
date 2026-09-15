@@ -10,6 +10,7 @@ export const taskMetadataSchema = z.object({
 	curriculumId: positiveId,
 	periodId: positiveId,
 	examSessionId: positiveId,
+	examPosition: z.preprocess((value) => value === '' || value === null ? null : value, z.coerce.number().int().min(1).max(12).nullable()).optional().default(null),
 	maxPoints: z.coerce.number().positive().max(1000)
 });
 
@@ -62,6 +63,9 @@ export const questionDraftSchema = z.object({
 	if (question.kind === 'multiple_choice' && question.config.kind === 'multiple_choice' && question.gradingRule.kind === 'multiple_choice') {
 		const ids = new Set(question.config.options.map((option) => option.id));
 		if (question.gradingRule.correctOptionIds.some((id) => !ids.has(id))) context.addIssue({ code: 'custom', message: 'Mindestens eine richtige Option existiert nicht.' });
+		if (new Set(question.gradingRule.correctOptionIds).size !== question.gradingRule.correctOptionIds.length) context.addIssue({ code: 'custom', message: 'Richtige Optionen dürfen nicht doppelt vorkommen.' });
+		if (question.config.minimumSelections !== undefined && question.config.maximumSelections !== undefined && question.config.minimumSelections > question.config.maximumSelections) context.addIssue({ code: 'custom', message: 'Die Mindestauswahl darf die Maximalauswahl nicht überschreiten.' });
+		if (question.config.maximumSelections !== undefined && question.config.maximumSelections > question.config.options.length) context.addIssue({ code: 'custom', message: 'Die Maximalauswahl überschreitet die Anzahl der Optionen.' });
 	}
 	if (question.kind === 'ordering' && question.config.kind === 'ordering' && question.gradingRule.kind === 'ordering') {
 		const configured = new Set(question.config.items.map((item) => item.id));
@@ -72,6 +76,8 @@ export const questionDraftSchema = z.object({
 		const left = new Set(question.config.left.map((item) => item.id));
 		const right = new Set(question.config.right.map((item) => item.id));
 		if (question.gradingRule.pairs.some((pair) => !left.has(pair.leftId) || !right.has(pair.rightId))) context.addIssue({ code: 'custom', message: 'Mindestens ein Zuordnungspaar verweist auf eine unbekannte Option.' });
+		if (new Set(question.gradingRule.pairs.map((pair) => pair.leftId)).size !== question.gradingRule.pairs.length || new Set(question.gradingRule.pairs.map((pair) => pair.rightId)).size !== question.gradingRule.pairs.length) context.addIssue({ code: 'custom', message: 'Jede Option darf in der Lösung nur einmal zugeordnet werden.' });
+		if (question.gradingRule.pairs.length !== question.config.left.length) context.addIssue({ code: 'custom', message: 'Die Lösung muss jeden linken Eintrag genau einmal zuordnen.' });
 	}
 });
 

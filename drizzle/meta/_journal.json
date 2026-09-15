@@ -15,6 +15,20 @@
       "when": 1789407930656,
       "tag": "0001_supabase_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789459969525,
+      "tag": "0002_grading_and_practice",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789461788244,
+      "tag": "0003_mock_exam_mode",
+      "breakpoints": true
     }
   ]
 }

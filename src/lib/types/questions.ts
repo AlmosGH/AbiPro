@@ -15,7 +15,13 @@ export const gradingRuleSchema = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('multiple_choice'), correctOptionIds: z.array(z.string().min(1)).min(1), allOrNothing: z.boolean().default(true) }),
 	z.object({ kind: z.literal('matching'), pairs: z.array(z.object({ leftId: z.string().min(1), rightId: z.string().min(1) })).min(1) }),
 	z.object({ kind: z.literal('ordering'), correctOrder: z.array(z.string().min(1)).min(2) }),
-	z.object({ kind: z.literal('short_text'), acceptedAnswers: z.array(z.string().min(1)).default([]), criteria: z.array(z.string().min(1)).min(1), aiEligible: z.boolean().default(false) })
+	z.object({
+		kind: z.literal('short_text'),
+		acceptedAnswers: z.array(z.string().min(1)).default([]),
+		criteria: z.array(z.string().min(1)).min(1),
+		aiEligible: z.boolean().default(false),
+		normalizeWhitespace: z.boolean().default(false)
+	})
 ]);
 
 export const answerPayloadSchema = z.discriminatedUnion('kind', [

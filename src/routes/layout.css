@@ -197,6 +197,111 @@ button:hover {
 	background: #f1f5f9;
 }
 
+.button-link {
+	display: inline-block;
+	padding: 0.5rem 0.85rem;
+	border: 1px solid #2563eb;
+	border-radius: 0.3rem;
+	text-decoration: none;
+}
+
+.readiness-message {
+	padding: 1rem;
+	border: 1px solid #f59e0b;
+	border-radius: 0.35rem;
+	background: #fffbeb;
+}
+
+.exam-header,
+.exam-actions,
+.exam-pager {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.exam-timer,
+.exam-score {
+	display: grid;
+	min-width: 10rem;
+	padding: 0.75rem 1rem;
+	border: 1px solid #cbd5e1;
+	border-radius: 0.35rem;
+	background: #ffffff;
+	text-align: right;
+}
+
+.exam-timer span,
+.exam-score span,
+.task-navigation small {
+	font-size: 0.75rem;
+	color: #64748b;
+}
+
+.exam-timer strong,
+.exam-score strong {
+	font-size: 1.35rem;
+}
+
+.exam-timer.timer-critical {
+	border-color: #dc2626;
+	color: #b91c1c;
+	background: #fef2f2;
+}
+
+.task-navigation {
+	display: grid;
+	grid-template-columns: repeat(12, minmax(3.5rem, 1fr));
+	gap: 0.4rem;
+	margin: 1.5rem 0;
+	overflow-x: auto;
+}
+
+.task-navigation button {
+	display: grid;
+	justify-items: center;
+	width: 100%;
+	min-width: 3.5rem;
+	padding: 0.45rem;
+}
+
+.task-navigation button.complete {
+	border-color: #16a34a;
+	background: #f0fdf4;
+}
+
+.task-navigation button.current {
+	outline: 2px solid #2563eb;
+	outline-offset: 1px;
+}
+
+.exam-task {
+	padding: 1rem;
+	border: 1px solid #cbd5e1;
+	border-radius: 0.35rem;
+	background: #ffffff;
+}
+
+.exam-actions,
+.exam-pager,
+.review-note {
+	margin-top: 1rem;
+}
+
+@media (max-width: 640px) {
+	.exam-header,
+	.exam-actions {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.exam-timer,
+	.exam-score {
+		text-align: left;
+	}
+}
+
 table {
 	width: 100%;
 	margin: 1rem 0;
@@ -257,6 +362,20 @@ img {
 	display: block;
 	max-width: 100%;
 	height: auto;
+}
+
+.ordering-input li {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.ordering-input li span {
+	margin-right: auto;
+}
+
+.save-error {
+	color: #b91c1c;
 }
 
 [role='alert'] {

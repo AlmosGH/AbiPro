@@ -179,6 +179,7 @@ try {
 		`;
 
 		for (const taskData of tasks) {
+			const seedSlug = `${taskData.slug}-mock-exam`;
 			const [periodSlug, periodName, periodPosition] = taskData.period;
 			const [topicSlug, topicName] = taskData.topic;
 			const [period] = await transaction<{ id: number }[]>`
@@ -192,15 +193,44 @@ try {
 				on conflict (slug) do update set name = excluded.name, period_id = excluded.period_id returning id
 			`;
 
-			const existing = await transaction<{ id: number }[]>`select id from app_private.tasks where slug = ${taskData.slug}`;
-			if (existing.length) continue;
+			const existing = await transaction<{ id: number; version_id: number | null; version_status: 'draft' | 'published' | 'retired' | null; exam_position: number | null }[]>`
+				select task.id, version.id as version_id, version.status as version_status, version.exam_position
+				from app_private.tasks as task
+				left join lateral (
+					select candidate.id, candidate.status, candidate.exam_position
+					from app_private.task_versions as candidate
+					where candidate.task_id = task.id
+					order by case candidate.status when 'published' then 0 when 'draft' then 1 else 2 end, candidate.version desc
+					limit 1
+				) as version on true
+				where task.slug = ${seedSlug}
+			`;
+			if (existing.length) {
+				const existingTask = existing[0];
+				if (!existingTask.version_id || !existingTask.version_status) throw new Error(`Seeded task ${seedSlug} has no version.`);
+				await transaction`
+					update app_private.tasks
+					set status = 'published', updated_at = now()
+					where id = ${existingTask.id}
+				`;
+				if (existingTask.version_status === 'draft') {
+					await transaction`
+						update app_private.task_versions
+						set status = 'published', exam_position = ${taskData.number}, published_at = now(), updated_at = now()
+						where id = ${existingTask.version_id}
+					`;
+				} else if (existingTask.version_status !== 'published' || existingTask.exam_position !== taskData.number) {
+					throw new Error(`Seeded task ${seedSlug} is not an eligible published task at exam position ${taskData.number}.`);
+				}
+				continue;
+			}
 
 			const [task] = await transaction<{ id: number }[]>`
-				insert into app_private.tasks (slug, status) values (${taskData.slug}, 'draft') returning id
+				insert into app_private.tasks (slug, status) values (${seedSlug}, 'draft') returning id
 			`;
 			const [version] = await transaction<{ id: number }[]>`
-				insert into app_private.task_versions (task_id, version, status, title, instructions, curriculum_id, period_id, exam_session_id, max_points)
-				values (${task.id}, 1, 'draft', ${taskData.title}, 'Offizielle Kurzantwort-Aufgabe aus der deutschsprachigen Abiturprüfung vom 6. Mai 2026. Als Testdaten importiert; vor produktiver Veröffentlichung redaktionell prüfen.', ${curriculum.id}, ${period.id}, ${session.id}, ${taskData.maxPoints}) returning id
+				insert into app_private.task_versions (task_id, version, status, title, instructions, curriculum_id, period_id, exam_session_id, max_points, exam_position, published_at)
+				values (${task.id}, 1, 'draft', ${taskData.title}, 'Offizielle Kurzantwort-Aufgabe aus der deutschsprachigen Abiturprüfung vom 6. Mai 2026. Als Testdaten importiert.', ${curriculum.id}, ${period.id}, ${session.id}, ${taskData.maxPoints}, ${taskData.number}, null) returning id
 			`;
 			await transaction`insert into app_private.task_version_topics (task_version_id, topic_id) values (${version.id}, ${topic.id})`;
 
@@ -216,9 +246,30 @@ try {
 					values (${version.id}, ${position}, ${question.kind}, ${question.prompt}, ${transaction.json(question.config)}, ${transaction.json(question.gradingRule)}, ${question.maxPoints})
 				`;
 			}
+			await transaction`update app_private.task_versions set status = 'published', published_at = now() where id = ${version.id}`;
+			await transaction`update app_private.tasks set status = 'published' where id = ${task.id}`;
 		}
 	});
-	console.log('12 short-answer exam tasks are available as draft test data. Essay tasks were not imported.');
+	const seeded = await sql<{ exam_position: number; max_points: number }[]>`
+		select version.exam_position, version.max_points::float8 as max_points
+		from app_private.task_versions as version
+		inner join app_private.tasks as task on task.id = version.task_id
+		inner join app_private.curricula as curriculum on curriculum.id = version.curriculum_id
+		inner join app_private.exam_sessions as session on session.id = version.exam_session_id
+		where task.slug like 'test-2026-mai-%-mock-exam'
+			and task.status = 'published'
+			and version.status = 'published'
+			and curriculum.code = 'NAT_2020'
+			and session.year >= 2024
+			and session.session in ('spring', 'autumn')
+		order by version.exam_position
+	`;
+	const ready = seeded.length === tasks.length && tasks.every((taskData, index) => {
+		const row = seeded[index];
+		return row?.exam_position === taskData.number && row.max_points === taskData.maxPoints;
+	});
+	if (!ready) throw new Error('Seed verification failed: the published mock-exam pool does not satisfy all 12 configured positions.');
+	console.log('12 published short-answer exam tasks are ready for practice and mock exam mode (50 points verified). Essay tasks were not imported.');
 } finally {
 	await sql.end();
 }

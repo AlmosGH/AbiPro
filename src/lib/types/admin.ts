@@ -40,6 +40,7 @@ export interface EditableQuestion {
 	acceptedAnswers: string[];
 	criteria: string[];
 	aiEligible: boolean;
+	normalizeWhitespace: boolean;
 }
 
 export function newSource(kind: SourceKind = 'text'): EditableSource {
@@ -63,7 +64,7 @@ export function sourcePayload(source: EditableSource) {
 }
 
 function baseQuestion(kind: QuestionKind): EditableQuestion {
-	return { clientId: id(), kind, prompt: '', maxPoints: 1, options: [], correctOptionIds: [], allOrNothing: true, minimumSelections: null, maximumSelections: null, left: [], right: [], pairs: [], items: [], correctOrder: [], multiline: false, maximumLength: null, acceptedAnswers: [''], criteria: [''], aiEligible: false };
+	return { clientId: id(), kind, prompt: '', maxPoints: 1, options: [], correctOptionIds: [], allOrNothing: true, minimumSelections: null, maximumSelections: null, left: [], right: [], pairs: [], items: [], correctOrder: [], multiline: false, maximumLength: null, acceptedAnswers: [''], criteria: [''], aiEligible: false, normalizeWhitespace: false };
 }
 
 export function newQuestion(kind: QuestionKind = 'choice'): EditableQuestion {
@@ -91,7 +92,7 @@ export function questionFromRecord(question: { kind: QuestionKind; prompt: strin
 	if (rule.kind === 'multiple_choice') { editable.correctOptionIds = [...rule.correctOptionIds]; editable.allOrNothing = rule.allOrNothing; }
 	if (rule.kind === 'matching') editable.pairs = structuredClone(rule.pairs);
 	if (rule.kind === 'ordering') editable.correctOrder = [...rule.correctOrder];
-	if (rule.kind === 'short_text') { editable.acceptedAnswers = rule.acceptedAnswers.length ? [...rule.acceptedAnswers] : ['']; editable.criteria = [...rule.criteria]; editable.aiEligible = rule.aiEligible; }
+	if (rule.kind === 'short_text') { editable.acceptedAnswers = rule.acceptedAnswers.length ? [...rule.acceptedAnswers] : ['']; editable.criteria = [...rule.criteria]; editable.aiEligible = rule.aiEligible; editable.normalizeWhitespace = rule.normalizeWhitespace ?? false; }
 	return editable;
 }
 
@@ -102,7 +103,7 @@ export function questionPayload(question: EditableQuestion) {
 		case 'multiple_choice': return { ...base, config: { kind: 'multiple_choice', options: question.options, ...(question.minimumSelections !== null ? { minimumSelections: question.minimumSelections } : {}), ...(question.maximumSelections !== null ? { maximumSelections: question.maximumSelections } : {}) }, gradingRule: { kind: 'multiple_choice', correctOptionIds: question.correctOptionIds, allOrNothing: question.allOrNothing } };
 		case 'matching': return { ...base, config: { kind: 'matching', left: question.left, right: question.right }, gradingRule: { kind: 'matching', pairs: question.pairs } };
 		case 'ordering': return { ...base, config: { kind: 'ordering', items: question.items }, gradingRule: { kind: 'ordering', correctOrder: question.correctOrder } };
-		case 'short_text': return { ...base, config: { kind: 'short_text', multiline: question.multiline, ...(question.maximumLength ? { maximumLength: question.maximumLength } : {}) }, gradingRule: { kind: 'short_text', acceptedAnswers: question.acceptedAnswers.filter(Boolean), criteria: question.criteria.filter(Boolean), aiEligible: question.aiEligible } };
+		case 'short_text': return { ...base, config: { kind: 'short_text', multiline: question.multiline, ...(question.maximumLength ? { maximumLength: question.maximumLength } : {}) }, gradingRule: { kind: 'short_text', acceptedAnswers: question.acceptedAnswers.filter(Boolean), criteria: question.criteria.filter(Boolean), aiEligible: question.aiEligible, normalizeWhitespace: question.normalizeWhitespace } };
 	}
 }
 

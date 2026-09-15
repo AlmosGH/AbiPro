@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
 	bigint,
 	check,
+	foreignKey,
 	index,
 	integer,
 	jsonb,
@@ -99,6 +100,7 @@ export const taskVersions = appPrivate.table('task_versions', {
 	periodId: bigint('period_id', { mode: 'number' }).notNull().references(() => historicalPeriods.id, { onDelete: 'restrict' }),
 	examSessionId: bigint('exam_session_id', { mode: 'number' }).notNull().references(() => examSessions.id, { onDelete: 'restrict' }),
 	maxPoints: numeric('max_points', { precision: 6, scale: 2, mode: 'number' }).notNull(),
+	examPosition: integer('exam_position'),
 	createdBy: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
 	publishedAt: timestamp('published_at', { withTimezone: true }),
 	createdAt,
@@ -109,10 +111,12 @@ export const taskVersions = appPrivate.table('task_versions', {
 	index('task_versions_curriculum_id_idx').on(table.curriculumId),
 	index('task_versions_period_id_idx').on(table.periodId),
 	index('task_versions_exam_session_id_idx').on(table.examSessionId),
+	index('task_versions_exam_position_idx').on(table.examPosition).where(sql`${table.examPosition} is not null`),
 	index('task_versions_created_by_idx').on(table.createdBy),
 	uniqueIndex('task_versions_published_idx').on(table.taskId).where(sql`${table.status} = 'published'`),
 	check('task_versions_version_check', sql`${table.version} > 0`),
 	check('task_versions_max_points_check', sql`${table.maxPoints} > 0`),
+	check('task_versions_exam_position_check', sql`${table.examPosition} is null or ${table.examPosition} between 1 and 12`),
 	check('task_versions_published_at_check', sql`(${table.status} = 'published' and ${table.publishedAt} is not null) or ${table.status} <> 'published'`)
 ]);
 
@@ -171,6 +175,7 @@ export const questions = appPrivate.table('questions', {
 	updatedAt
 }, (table) => [
 	unique('questions_task_version_position_unique').on(table.taskVersionId, table.position),
+	unique('questions_id_task_version_unique').on(table.id, table.taskVersionId),
 	index('questions_task_version_id_idx').on(table.taskVersionId),
 	check('questions_position_check', sql`${table.position} >= 0`),
 	check('questions_max_points_check', sql`${table.maxPoints} > 0`)
@@ -192,6 +197,7 @@ export const assessmentAttempts = appPrivate.table('assessment_attempts', {
 }, (table) => [
 	index('assessment_attempts_user_id_idx').on(table.userId),
 	index('assessment_attempts_user_active_idx').on(table.userId, table.startedAt).where(sql`${table.status} = 'in_progress'`),
+	uniqueIndex('assessment_attempts_user_active_mock_exam_idx').on(table.userId).where(sql`${table.kind} = 'mock_exam' and ${table.status} = 'in_progress'`),
 	check('assessment_attempts_time_limit_check', sql`${table.timeLimitSeconds} is null or ${table.timeLimitSeconds} > 0`),
 	check('assessment_attempts_max_score_check', sql`${table.maxScore} > 0`),
 	check('assessment_attempts_score_check', sql`${table.score} is null or (${table.score} >= 0 and ${table.score} <= ${table.maxScore})`),
@@ -208,6 +214,7 @@ export const attemptTasks = appPrivate.table('attempt_tasks', {
 }, (table) => [
 	unique('attempt_tasks_attempt_position_unique').on(table.attemptId, table.position),
 	unique('attempt_tasks_attempt_version_unique').on(table.attemptId, table.taskVersionId),
+	unique('attempt_tasks_id_version_unique').on(table.id, table.taskVersionId),
 	index('attempt_tasks_attempt_id_idx').on(table.attemptId),
 	index('attempt_tasks_task_version_id_idx').on(table.taskVersionId),
 	check('attempt_tasks_position_check', sql`${table.position} >= 0`),
@@ -216,8 +223,9 @@ export const attemptTasks = appPrivate.table('attempt_tasks', {
 
 export const attemptAnswers = appPrivate.table('attempt_answers', {
 	id: identity(),
-	attemptTaskId: bigint('attempt_task_id', { mode: 'number' }).notNull().references(() => attemptTasks.id, { onDelete: 'cascade' }),
-	questionId: bigint('question_id', { mode: 'number' }).notNull().references(() => questions.id, { onDelete: 'restrict' }),
+	attemptTaskId: bigint('attempt_task_id', { mode: 'number' }).notNull(),
+	questionId: bigint('question_id', { mode: 'number' }).notNull(),
+	taskVersionId: bigint('task_version_id', { mode: 'number' }).notNull(),
 	response: jsonb('response').$type<AnswerPayload>().notNull(),
 	status: gradingStatus('status').notNull().default('pending'),
 	awardedPoints: numeric('awarded_points', { precision: 6, scale: 2, mode: 'number' }),
@@ -229,6 +237,16 @@ export const attemptAnswers = appPrivate.table('attempt_answers', {
 	unique('attempt_answers_attempt_task_question_unique').on(table.attemptTaskId, table.questionId),
 	index('attempt_answers_attempt_task_id_idx').on(table.attemptTaskId),
 	index('attempt_answers_question_id_idx').on(table.questionId),
+	foreignKey({
+		name: 'attempt_answers_attempt_task_version_fk',
+		columns: [table.attemptTaskId, table.taskVersionId],
+		foreignColumns: [attemptTasks.id, attemptTasks.taskVersionId]
+	}).onDelete('cascade'),
+	foreignKey({
+		name: 'attempt_answers_question_version_fk',
+		columns: [table.questionId, table.taskVersionId],
+		foreignColumns: [questions.id, questions.taskVersionId]
+	}).onDelete('restrict'),
 	check('attempt_answers_awarded_points_check', sql`${table.awardedPoints} is null or ${table.awardedPoints} >= 0`)
 ]);
 

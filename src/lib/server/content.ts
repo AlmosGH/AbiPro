@@ -37,7 +37,7 @@ export async function createTask(actor: Actor, metadata: TaskMetadata) {
 		const [version] = await transaction.insert(taskVersions).values({
 			taskId: task.id, version: 1, title: metadata.title, instructions: metadata.instructions || null,
 			curriculumId: metadata.curriculumId, periodId: metadata.periodId, examSessionId: metadata.examSessionId,
-			maxPoints: metadata.maxPoints, createdBy: actor.userId
+			examPosition: metadata.examPosition, maxPoints: metadata.maxPoints, createdBy: actor.userId
 		}).returning({ id: taskVersions.id });
 		return version;
 	});
@@ -92,7 +92,7 @@ export async function getAdminTaskVersion(id: number) {
 		version: taskVersions.version, status: taskVersions.status, title: taskVersions.title,
 		instructions: taskVersions.instructions, curriculumId: taskVersions.curriculumId,
 		periodId: taskVersions.periodId, examSessionId: taskVersions.examSessionId,
-		maxPoints: taskVersions.maxPoints, publishedAt: taskVersions.publishedAt
+		examPosition: taskVersions.examPosition, maxPoints: taskVersions.maxPoints, publishedAt: taskVersions.publishedAt
 	}).from(taskVersions).innerJoin(tasks, eq(tasks.id, taskVersions.taskId)).where(eq(taskVersions.id, id));
 	if (!version) return null;
 	const [sourceRows, questionRows, topicRows] = await Promise.all([
@@ -114,7 +114,7 @@ export async function saveTaskDraft(actor: Actor, id: number, metadata: Omit<Tas
 
 		await transaction.update(taskVersions).set({
 			title: metadata.title, instructions: metadata.instructions || null, curriculumId: metadata.curriculumId,
-			periodId: metadata.periodId, examSessionId: metadata.examSessionId, maxPoints: metadata.maxPoints
+			periodId: metadata.periodId, examSessionId: metadata.examSessionId, examPosition: metadata.examPosition, maxPoints: metadata.maxPoints
 		}).where(eq(taskVersions.id, id));
 		await transaction.delete(taskVersionTopics).where(eq(taskVersionTopics.taskVersionId, id));
 		await transaction.delete(sources).where(eq(sources.taskVersionId, id));
@@ -170,7 +170,7 @@ export async function createDraftRevision(actor: Actor, sourceVersionId: number)
 			taskId: sourceVersion.taskId, version: (latest?.version ?? 0) + 1, status: 'draft',
 			title: sourceVersion.title, instructions: sourceVersion.instructions,
 			curriculumId: sourceVersion.curriculumId, periodId: sourceVersion.periodId,
-			examSessionId: sourceVersion.examSessionId, maxPoints: sourceVersion.maxPoints,
+			examSessionId: sourceVersion.examSessionId, examPosition: sourceVersion.examPosition, maxPoints: sourceVersion.maxPoints,
 			createdBy: actor.userId
 		}).returning({ id: taskVersions.id });
 		const [sourceRows, questionRows, topicRows] = await Promise.all([

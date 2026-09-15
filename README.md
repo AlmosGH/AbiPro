@@ -119,11 +119,19 @@ Only published tasks are visible in Aufgaben, Üben, and Prüfung.
 
 ## Status
 
-Currently in development. Milestones 1 through 3 are implemented: authentication and authorization,
+Currently in development. Milestones 1 through 5 are implemented: authentication and authorization,
 the versioned task-content workflow, the learner task browser, and a complete admin CMS with
 structured question/source editors, private asset management, validation, previews, revisions,
 publishing, archiving, and restoration. Milestone 3.1 adds a learner-safe content boundary,
-shared read-only task rendering, and an authenticated browser-test scaffold.
+shared read-only task rendering, and an authenticated browser-test scaffold. The deterministic
+grader and practice workflow add validated autosave, resumable attempts, transactional idempotent
+submission, per-question results, and auditable grading runs. Mock exam mode adds a configurable
+official 12-task/50-point composition, a server-authoritative 100-minute deadline, persisted task
+order, autosave, navigation, and detailed review. Database locks and partial uniqueness make start,
+save, submission, and timeout finalization safe across refreshes and tabs.
+
+Every practice attempt is retained. The result page computes and displays the learner's best score
+for the immutable task version; older attempts are not overwritten or re-labelled.
 
 The initial V1 aims to include:
 

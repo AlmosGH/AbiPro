@@ -10,5 +10,6 @@
 	<h1>{data.task.title}</h1>
 	<p>{data.task.year} · {data.task.session === 'spring' ? 'Frühjahr' : 'Herbst'} · {data.task.period} · {data.task.curriculum} · {data.task.maxPoints} Punkte</p>
 	<p>Themen: {data.task.topics.join(', ')}</p>
+	<p><a href={`/uben?task=${data.task.slug}`}>Diese Aufgabe üben</a></p>
 	<TaskViewer instructions={data.task.instructions} sources={data.task.sources} questions={data.task.questions} />
 </main>

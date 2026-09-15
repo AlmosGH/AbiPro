@@ -18,6 +18,6 @@
 	</form>
 	<p>{data.tasks.length} {data.tasks.length === 1 ? 'Aufgabe' : 'Aufgaben'} gefunden.</p>
 	{#if data.tasks.length}
-		<ul>{#each data.tasks as task (task.slug)}<li><h2><a href={`/aufgaben/${task.slug}`}>{task.title}</a></h2><p>{task.year} · {task.session === 'spring' ? 'Frühjahr' : 'Herbst'} · {task.period} · {task.curriculum} · {task.maxPoints} Punkte</p><p>Themen: {task.topics.join(', ')}</p></li>{/each}</ul>
+		<ul>{#each data.tasks as task (task.slug)}<li><h2><a href={`/aufgaben/${task.slug}`}>{task.title}</a></h2><p>{task.year} · {task.session === 'spring' ? 'Frühjahr' : 'Herbst'} · {task.period} · {task.curriculum} · {task.maxPoints} Punkte</p><p>Themen: {task.topics.join(', ')}</p><p><a href={`/uben?task=${task.slug}`}>Diese Aufgabe üben</a></p></li>{/each}</ul>
 	{:else}<p>Für diese Filter wurden keine veröffentlichten Aufgaben gefunden.</p>{/if}
 </main>
