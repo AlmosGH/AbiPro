@@ -11,6 +11,7 @@ import {
 } from '$lib/server/db/schema';
 import { learnerQuestionSelection, toLearnerQuestion } from '$lib/server/learner-content';
 import type { AnswerPayload } from '$lib/types/questions';
+import { isAiEligibleMiss, processAiGradesForAttempt, queueAiGrade } from '$lib/server/ai-grading.server';
 
 const eligibleConditions = () => and(
 	eq(tasks.status, 'published'),
@@ -95,7 +96,7 @@ export async function createMockExamAttempt(userId: string) {
 }
 
 async function finalizeMockExam(userId: string, attemptId: number, onlyIfExpired: boolean) {
-	return getDb().transaction(async (transaction) => {
+	const prepared = await getDb().transaction(async (transaction) => {
 		const [attempt] = await transaction.select({
 			id: assessmentAttempts.id,
 			status: assessmentAttempts.status,
@@ -108,7 +109,8 @@ async function finalizeMockExam(userId: string, attemptId: number, onlyIfExpired
 			eq(assessmentAttempts.kind, 'mock_exam')
 		)).for('update');
 		if (!attempt) return null;
-		if (attempt.status === 'graded') return { score: Number(attempt.score ?? 0), maximum: attempt.maxScore };
+		if (attempt.status === 'graded') return { score: Number(attempt.score ?? 0), maximum: attempt.maxScore, hasAi: false };
+		if (attempt.status === 'submitted') return { score: Number(attempt.score ?? 0), maximum: attempt.maxScore, hasAi: true };
 		if (attempt.status !== 'in_progress') throw new Error('Die Prüfung wird bereits verarbeitet.');
 		const clockRows = await transaction.execute(sql`select clock_timestamp() as "serverNow"`);
 		const serverNow = asDatabaseDate(clockRows[0].serverNow);
@@ -127,6 +129,7 @@ async function finalizeMockExam(userId: string, attemptId: number, onlyIfExpired
 			.where(eq(attemptTasks.attemptId, attemptId));
 		const byQuestion = new Map(existing.map((row) => [row.attempt_answers.questionId, row.attempt_answers]));
 		let total = 0;
+		let hasAi = false;
 		for (const row of questionRows) {
 			let answer = byQuestion.get(row.question.id);
 			let grade: DeterministicGrade;
@@ -142,6 +145,11 @@ async function finalizeMockExam(userId: string, attemptId: number, onlyIfExpired
 			} else {
 				grade = gradeDeterministically(row.question, answer.response);
 			}
+			if (isAiEligibleMiss(row.question, answer.response, grade.correctness === 'correct')) {
+				hasAi = true;
+				await queueAiGrade(transaction, answer.id, row.question, answer.response);
+				continue;
+			}
 			const result = {
 				...grade,
 				inputHash: deterministicInputHash({
@@ -155,6 +163,7 @@ async function finalizeMockExam(userId: string, attemptId: number, onlyIfExpired
 				method: 'deterministic',
 				status: 'graded',
 				graderSchemaVersion: DETERMINISTIC_GRADER_SCHEMA_VERSION,
+				inputHash: result.inputHash,
 				result,
 				awardedPoints: grade.score,
 				feedback: grade.feedback,
@@ -166,10 +175,12 @@ async function finalizeMockExam(userId: string, attemptId: number, onlyIfExpired
 			total += grade.score;
 		}
 		const score = Math.min(attempt.maxScore, Math.round((total + Number.EPSILON) * 100) / 100);
-		await transaction.update(assessmentAttempts).set({ status: 'graded', submittedAt: serverNow, score })
+		await transaction.update(assessmentAttempts).set({ status: hasAi ? 'submitted' : 'graded', submittedAt: serverNow, score: hasAi ? null : score })
 			.where(eq(assessmentAttempts.id, attempt.id));
-		return { score, maximum: attempt.maxScore };
+		return { score, maximum: attempt.maxScore, hasAi };
 	});
+	if (prepared?.hasAi) await processAiGradesForAttempt(userId, attemptId);
+	return prepared;
 }
 
 export function submitMockExam(userId: string, attemptId: number) {
@@ -269,8 +280,8 @@ export async function getMockExamAttempt(userId: string, attemptId: number) {
 		db.select({ id: sources.id, taskVersionId: sources.taskVersionId, position: sources.position, kind: sources.kind, title: sources.title, content: sources.content, assetPath: assets.path, assetAltText: assets.altText })
 			.from(sources).leftJoin(assets, eq(assets.id, sources.assetId)).where(inArray(sources.taskVersionId, versionIds)).orderBy(asc(sources.position)),
 		db.select({ ...learnerQuestionSelection, taskVersionId: questions.taskVersionId }).from(questions).where(inArray(questions.taskVersionId, versionIds)).orderBy(asc(questions.position)),
-		db.select({ questionId: attemptAnswers.questionId, attemptTaskId: attemptAnswers.attemptTaskId, response: attemptAnswers.response, lastSavedAt: attemptAnswers.lastSavedAt, awardedPoints: attemptAnswers.awardedPoints, feedback: attemptAnswers.feedback, result: gradingRuns.result })
-			.from(attemptAnswers).leftJoin(gradingRuns, and(eq(gradingRuns.attemptAnswerId, attemptAnswers.id), eq(gradingRuns.method, 'deterministic'), eq(gradingRuns.status, 'graded')))
+		db.select({ id: attemptAnswers.id, questionId: attemptAnswers.questionId, attemptTaskId: attemptAnswers.attemptTaskId, response: attemptAnswers.response, lastSavedAt: attemptAnswers.lastSavedAt, status: attemptAnswers.status, awardedPoints: attemptAnswers.awardedPoints, feedback: attemptAnswers.feedback })
+			.from(attemptAnswers)
 			.where(inArray(attemptAnswers.attemptTaskId, attemptTaskIds)),
 		db.select({ taskVersionId: taskVersionTopics.taskVersionId, name: topics.name }).from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId))
 			.where(inArray(taskVersionTopics.taskVersionId, versionIds)).orderBy(asc(topics.name))
@@ -285,10 +296,12 @@ export async function getMockExamAttempt(userId: string, attemptId: number) {
 			questions: questionRows.filter((row) => row.taskVersionId === task.taskVersionId).map(toLearnerQuestion),
 			answers: answerRows.filter((row) => row.attemptTaskId === task.attemptTaskId).map(({ questionId, response, lastSavedAt }) => ({ questionId, response, lastSavedAt })),
 			results: submitted ? answerRows.filter((row) => row.attemptTaskId === task.attemptTaskId).map((answer) => ({
+				answerId: answer.id,
 				questionId: answer.questionId,
+				status: answer.status,
 				score: answer.awardedPoints ?? 0,
-				maximum: Number((answer.result as { maximum?: unknown } | null)?.maximum ?? questionRows.find((question) => question.id === answer.questionId)?.maxPoints ?? 0),
-				correctness: ((answer.result as { correctness?: unknown } | null)?.correctness ?? 'incorrect') as DeterministicGrade['correctness'],
+				maximum: Number(questionRows.find((question) => question.id === answer.questionId)?.maxPoints ?? 0),
+				correctness: (answer.status === 'needs_review' ? 'invalid' : Number(answer.awardedPoints) >= Number(questionRows.find((question) => question.id === answer.questionId)?.maxPoints ?? 0) ? 'correct' : answer.awardedPoints && answer.awardedPoints > 0 ? 'partial' : 'incorrect') as DeterministicGrade['correctness'],
 				feedback: answer.feedback ?? ''
 			})) : []
 		}))

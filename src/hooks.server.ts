@@ -1,7 +1,8 @@
 import { env as publicEnv } from '$env/dynamic/public';
 import { createServerClient } from '@supabase/ssr';
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { findProfile } from '$lib/server/profiles';
+import { logServerError } from '$lib/server/logger.server';
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const supabaseUrl = publicEnv.PUBLIC_SUPABASE_URL;
@@ -30,4 +31,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	return resolve(event, {
 		filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
 	});
+};
+
+export const handleError: HandleServerError = ({ error, event, status }) => {
+	const requestId = event.request.headers.get('x-request-id') ?? crypto.randomUUID();
+	logServerError(error, { requestId, route: event.route.id ?? event.url.pathname, userId: event.locals.userId });
+	return { message: status >= 500 ? 'Ein interner Fehler ist aufgetreten.' : 'Die Anfrage konnte nicht verarbeitet werden.', requestId };
 };

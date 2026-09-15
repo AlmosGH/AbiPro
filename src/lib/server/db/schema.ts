@@ -27,7 +27,7 @@ export const sourceKind = appPrivate.enum('source_kind', ['text', 'image', 'tabl
 export const questionKind = appPrivate.enum('question_kind', ['choice', 'multiple_choice', 'matching', 'ordering', 'short_text']);
 export const assessmentKind = appPrivate.enum('assessment_kind', ['practice', 'mock_exam']);
 export const assessmentStatus = appPrivate.enum('assessment_status', ['in_progress', 'submitted', 'graded', 'abandoned']);
-export const gradingMethod = appPrivate.enum('grading_method', ['deterministic', 'ai']);
+export const gradingMethod = appPrivate.enum('grading_method', ['deterministic', 'ai', 'self']);
 export const gradingStatus = appPrivate.enum('grading_status', ['pending', 'processing', 'graded', 'needs_review', 'failed']);
 
 const createdAt = timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
@@ -196,6 +196,7 @@ export const assessmentAttempts = appPrivate.table('assessment_attempts', {
 	updatedAt
 }, (table) => [
 	index('assessment_attempts_user_id_idx').on(table.userId),
+	index('assessment_attempts_user_kind_status_submitted_idx').on(table.userId, table.kind, table.status, table.submittedAt),
 	index('assessment_attempts_user_active_idx').on(table.userId, table.startedAt).where(sql`${table.status} = 'in_progress'`),
 	uniqueIndex('assessment_attempts_user_active_mock_exam_idx').on(table.userId).where(sql`${table.kind} = 'mock_exam' and ${table.status} = 'in_progress'`),
 	check('assessment_attempts_time_limit_check', sql`${table.timeLimitSeconds} is null or ${table.timeLimitSeconds} > 0`),
@@ -258,6 +259,8 @@ export const gradingRuns = appPrivate.table('grading_runs', {
 	provider: text('provider'),
 	model: text('model'),
 	graderSchemaVersion: integer('grader_schema_version').notNull().default(1),
+	inputHash: text('input_hash').notNull(),
+	attemptCount: integer('attempt_count').notNull().default(1),
 	result: jsonb('result').$type<Record<string, unknown>>(),
 	awardedPoints: numeric('awarded_points', { precision: 6, scale: 2, mode: 'number' }),
 	feedback: text('feedback'),
@@ -268,10 +271,21 @@ export const gradingRuns = appPrivate.table('grading_runs', {
 	completedAt: timestamp('completed_at', { withTimezone: true })
 }, (table) => [
 	index('grading_runs_attempt_answer_id_idx').on(table.attemptAnswerId),
+	uniqueIndex('grading_runs_idempotency_idx').on(table.attemptAnswerId, table.method, table.graderSchemaVersion, table.inputHash),
 	index('grading_runs_pending_idx').on(table.createdAt).where(sql`${table.status} in ('pending', 'processing')`),
 	check('grading_runs_schema_version_check', sql`${table.graderSchemaVersion} > 0`),
 	check('grading_runs_awarded_points_check', sql`${table.awardedPoints} is null or ${table.awardedPoints} >= 0`),
-	check('grading_runs_duration_check', sql`${table.durationMs} is null or ${table.durationMs} >= 0`)
+	check('grading_runs_duration_check', sql`${table.durationMs} is null or ${table.durationMs} >= 0`),
+	check('grading_runs_attempt_count_check', sql`${table.attemptCount} between 1 and 3`)
+]);
+
+export const rateLimitEvents = appPrivate.table('rate_limit_events', {
+	id: identity(),
+	userId: uuid('user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+	action: text('action').notNull(),
+	createdAt
+}, (table) => [
+	index('rate_limit_events_user_action_created_idx').on(table.userId, table.action, table.createdAt)
 ]);
 
 export type Profile = typeof profiles.$inferSelect;

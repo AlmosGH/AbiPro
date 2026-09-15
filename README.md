@@ -53,7 +53,7 @@ Users can create an account to save:
 * **Supabase Auth**
 * **Drizzle ORM**
 * **Zod**
-* **Gemini API** for semantic answer grading
+* **Gemini API** (free tier by default) for semantic answer grading
 * **Vitest / Playwright**
 
 ## Project Structure
@@ -119,7 +119,7 @@ Only published tasks are visible in Aufgaben, Üben, and Prüfung.
 
 ## Status
 
-Currently in development. Milestones 1 through 5 are implemented: authentication and authorization,
+Currently in development. Milestones 1 through 9 are implemented: authentication and authorization,
 the versioned task-content workflow, the learner task browser, and a complete admin CMS with
 structured question/source editors, private asset management, validation, previews, revisions,
 publishing, archiving, and restoration. Milestone 3.1 adds a learner-safe content boundary,
@@ -212,6 +212,8 @@ npm run dev
 
 The interface intentionally uses only a light, basic presentation layer so it can be restyled later.
 Run `npm test`, `npm run check`, and `npm run build` before committing changes.
+
+AI grading needs the server-only `GEMINI_API_KEY` from Google AI Studio. Exact accepted answers never call Gemini. Normal tests use fixture transports and never make live model calls. See `docs/operations.md` for release, backup, rollback, security, load-test, and usability procedures.
 
 The authenticated Playwright smoke test uses a dedicated learner account. Install Chromium once,
 set `E2E_USER_EMAIL` and `E2E_USER_PASSWORD`, then run:

@@ -123,26 +123,30 @@
 	<section><h2>Quellen</h2><SourceList sources={data.attempt.sources} /></section>
 
 	<section>
-		<h2>{data.attempt.status === 'graded' ? 'Ergebnis' : 'Fragen'}</h2>
+		<h2>{data.attempt.status === 'in_progress' ? 'Fragen' : 'Ergebnis'}</h2>
 		{#if data.attempt.status === 'graded'}
 			<p><strong>{data.attempt.score} von {data.attempt.maxScore} Punkten</strong></p>
 			{#if data.bestAttempt}<p>Bestes Ergebnis für diese Aufgabenversion: {data.bestAttempt.score} von {data.bestAttempt.maxScore} Punkten.</p>{/if}
 		{/if}
 		{#if form?.message}<p role="alert">{form.message}</p>{/if}
 		{#if submitError}<p role="alert" class="save-error">{submitError}</p>{/if}
-		<form method="POST" action="?/submit" onsubmit={submitAttempt}>
+		{#each data.attempt.results.filter((result) => result.status === 'needs_review') as result (result.answerId)}<form id={`self-grade-${result.answerId}`} method="POST" action="?/selfGrade"></form>{/each}
+		<form method="POST" action="?/submit" onsubmit={data.attempt.status === 'in_progress' ? submitAttempt : undefined}>
 			{#each data.attempt.questions as question, index (question.id)}
 				<article>
 					<h3>{index + 1}. {question.prompt} ({question.maxPoints} P.)</h3>
-					<PracticeAnswerInput {question} value={answers[question.id]} disabled={data.attempt.status === 'graded'} onanswer={(answer) => updateAnswer(question.id, answer)} />
+					<PracticeAnswerInput {question} value={answers[question.id]} disabled={data.attempt.status !== 'in_progress'} onanswer={(answer) => updateAnswer(question.id, answer)} />
 					{#if data.attempt.status === 'in_progress'}
 						<p class:save-error={saveStates[question.id] === 'error'} aria-live="polite">
 							{saveStates[question.id] === 'saving' ? 'Wird gespeichert …' : saveStates[question.id] === 'saved' ? 'Gespeichert' : saveStates[question.id] === 'error' ? errors[question.id] : ''}
 						</p>
 					{:else if resultFor(question.id)}
 						{@const result = resultFor(question.id)!}
-						<p><strong>{result.score} von {result.maximum} Punkten · {result.correctness === 'correct' ? 'Richtig' : result.correctness === 'partial' ? 'Teilweise richtig' : 'Nicht richtig'}</strong></p>
+						<p><strong>{result.status === 'pending' || result.status === 'processing' ? 'Bewertung ausstehend' : `${result.score} von ${result.maximum} Punkten · ${result.correctness === 'correct' ? 'Richtig' : result.correctness === 'partial' ? 'Teilweise richtig' : result.status === 'needs_review' ? 'Selbstbewertung nötig' : 'Nicht richtig'}`}</strong></p>
 						<p>{result.feedback}</p>
+						{#if result.status === 'needs_review'}
+							<div class="self-grade"><label>Eigene Punktzahl (0–{result.maximum}) <input form={`self-grade-${result.answerId}`} type="number" name="awardedPoints" min="0" max={result.maximum} step="0.5" required /></label><button form={`self-grade-${result.answerId}`} name="answerId" value={result.answerId}>Selbst bewerten</button></div>
+						{/if}
 					{/if}
 				</article>
 			{/each}

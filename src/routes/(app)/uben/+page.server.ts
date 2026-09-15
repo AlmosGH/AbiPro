@@ -4,6 +4,7 @@ import { getReferenceData } from '$lib/server/content';
 import { createPracticeAttempt, listResumablePracticeAttempts } from '$lib/server/practice';
 import { requireActor } from '$lib/server/authorization';
 import type { Actions, PageServerLoad } from './$types';
+import { enforceRateLimit } from '$lib/server/rate-limit';
 
 const optionalId = z.preprocess((value) => value === '' || value === null ? undefined : value, z.coerce.number().int().positive().optional());
 
@@ -33,6 +34,7 @@ export const actions: Actions = {
 		}).safeParse(Object.fromEntries(formData));
 		if (!parsed.success) return fail(400, { message: 'Die Übungseinstellungen sind ungültig.' });
 		try {
+			await enforceRateLimit(actor.userId, 'attempt_create');
 			const attempt = await createPracticeAttempt(actor.userId, parsed.data);
 			redirect(303, `/uben/${attempt.id}`);
 		} catch (cause) {

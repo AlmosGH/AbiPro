@@ -1,0 +1,1 @@
+CREATE INDEX "assessment_attempts_user_kind_status_submitted_idx" ON "app_private"."assessment_attempts" USING btree ("user_id","kind","status","submitted_at");

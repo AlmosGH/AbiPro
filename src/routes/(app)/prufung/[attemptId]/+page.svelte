@@ -52,6 +52,7 @@
 	const unansweredCount = $derived(totalQuestions - answeredQuestionIds.size);
 	const currentTask = $derived(data.attempt.tasks[currentTaskIndex]);
 	const remainingLabel = $derived(formatRemaining(remainingMilliseconds));
+	const timerAnnouncement = $derived(remainingMilliseconds <= 0 ? 'Die Bearbeitungszeit ist abgelaufen.' : `Noch ${Math.ceil(remainingMilliseconds / 60_000)} Minuten Bearbeitungszeit.`);
 
 	onMount(() => {
 		if (data.attempt.status !== 'in_progress') return;
@@ -200,12 +201,12 @@
 	<div class="exam-header">
 		<div>
 			<p><a href="/prufung">Zur Prüfungsübersicht</a></p>
-			<h1>{data.attempt.status === 'graded' ? 'Prüfungsauswertung' : 'Laufende Prüfung'}</h1>
+			<h1>{data.attempt.status === 'in_progress' ? 'Laufende Prüfung' : 'Prüfungsauswertung'}</h1>
 		</div>
 		{#if data.attempt.status === 'in_progress'}
-			<p class:timer-critical={remainingMilliseconds < 5 * 60 * 1000} class="exam-timer" aria-live="polite"><span>Verbleibende Zeit</span><strong>{remainingLabel}</strong></p>
+			<p class:timer-critical={remainingMilliseconds < 5 * 60 * 1000} class="exam-timer"><span>Verbleibende Zeit</span><strong>{remainingLabel}</strong></p><p class="sr-only" aria-live="polite">{timerAnnouncement}</p>
 		{:else}
-			<p class="exam-score"><span>Ergebnis</span><strong>{data.attempt.score} / {data.attempt.maxScore}</strong></p>
+			<p class="exam-score"><span>Ergebnis</span><strong>{data.attempt.status === 'graded' ? `${data.attempt.score} / ${data.attempt.maxScore}` : 'Bewertung ausstehend'}</strong></p>
 		{/if}
 	</div>
 
@@ -230,19 +231,23 @@
 		<h3>Quellen</h3>
 		<SourceList sources={currentTask.sources} />
 
-		<form method="POST" action="?/finish" onsubmit={(event) => { event.preventDefault(); void finishAttempt(false); }}>
+		{#each currentTask.results.filter((result) => result.status === 'needs_review') as result (result.answerId)}<form id={`self-grade-${result.answerId}`} method="POST" action="?/selfGrade"></form>{/each}
+		<form method="POST" action="?/finish" onsubmit={data.attempt.status === 'in_progress' ? (event) => { event.preventDefault(); void finishAttempt(false); } : undefined}>
 			{#each currentTask.questions as question, index (question.id)}
 				<article>
 					<h3>{index + 1}. {question.prompt} ({question.maxPoints} P.)</h3>
-					<PracticeAnswerInput {question} value={answers[question.id]} disabled={clientExpired || data.attempt.status === 'graded'} onanswer={(answer) => updateAnswer(question.id, answer)} />
+					<PracticeAnswerInput {question} value={answers[question.id]} disabled={clientExpired || data.attempt.status !== 'in_progress'} onanswer={(answer) => updateAnswer(question.id, answer)} />
 					{#if data.attempt.status === 'in_progress'}
 						<p class:save-error={saveStates[question.id] === 'error'} aria-live="polite">
 							{saveStates[question.id] === 'saving' ? 'Wird gespeichert …' : saveStates[question.id] === 'saved' ? 'Gespeichert' : saveStates[question.id] === 'error' ? errors[question.id] : ''}
 						</p>
 					{:else if resultFor(question.id)}
 						{@const result = resultFor(question.id)!}
-						<p><strong>{result.score} von {result.maximum} Punkten · {result.correctness === 'correct' ? 'Richtig' : result.correctness === 'partial' ? 'Teilweise richtig' : 'Nicht richtig'}</strong></p>
+						<p><strong>{result.status === 'pending' || result.status === 'processing' ? 'Bewertung ausstehend' : `${result.score} von ${result.maximum} Punkten · ${result.correctness === 'correct' ? 'Richtig' : result.correctness === 'partial' ? 'Teilweise richtig' : result.status === 'needs_review' ? 'Selbstbewertung nötig' : 'Nicht richtig'}`}</strong></p>
 						<p>{result.feedback}</p>
+						{#if result.status === 'needs_review'}
+							<div class="self-grade"><label>Eigene Punktzahl (0–{result.maximum}) <input form={`self-grade-${result.answerId}`} type="number" name="awardedPoints" min="0" max={result.maximum} step="0.5" required /></label><button form={`self-grade-${result.answerId}`} name="answerId" value={result.answerId}>Selbst bewerten</button></div>
+						{/if}
 					{/if}
 				</article>
 			{/each}

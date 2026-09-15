@@ -11,6 +11,7 @@ vi.mock('$lib/server/practice', () => ({
 	submitPracticeAttempt: mocks.submitPracticeAttempt
 }));
 vi.mock('$lib/server/storage', () => ({ createAssetSignedUrl: vi.fn() }));
+vi.mock('$lib/server/rate-limit', () => ({ enforceRateLimit: vi.fn() }));
 
 import { actions } from './+page.server';
 

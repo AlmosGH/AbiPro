@@ -302,7 +302,7 @@ export async function listPublishedTasks(filters: { query?: string; curriculumId
 	const topicRows = ids.length ? await db.select({ versionId: taskVersionTopics.taskVersionId, name: topics.name })
 		.from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId))
 		.where(inArray(taskVersionTopics.taskVersionId, ids)).orderBy(asc(topics.name)) : [];
-	return rows.map(({ versionId, ...row }) => ({ ...row, topics: topicRows.filter((topic) => topic.versionId === versionId).map((topic) => topic.name) }));
+	return rows.map(({ versionId, ...row }) => ({ ...row, taskVersionId: versionId, topics: topicRows.filter((topic) => topic.versionId === versionId).map((topic) => topic.name) }));
 }
 
 export async function getPublishedTask(slug: string) {

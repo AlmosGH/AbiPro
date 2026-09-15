@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { getBestPracticeScore, getPracticeAttempt, submitPracticeAttempt } from '$lib/server/practice';
 import { createAssetSignedUrl } from '$lib/server/storage';
 import { requireActor } from '$lib/server/authorization';
+import { selfGradeAnswer } from '$lib/server/ai-grading.server';
 import type { Actions, PageServerLoad } from './$types';
+import { enforceRateLimit } from '$lib/server/rate-limit';
 
 const attemptIdSchema = z.coerce.number().int().positive();
 
@@ -29,10 +31,23 @@ export const actions: Actions = {
 		const parsedId = attemptIdSchema.safeParse(params.attemptId);
 		if (!parsedId.success) return fail(404, { message: 'Übungsversuch nicht gefunden.' });
 		try {
+			await enforceRateLimit(actor.userId, 'attempt_submit');
 			const result = await submitPracticeAttempt(actor.userId, parsedId.data);
 			return { graded: true, ...result };
 		} catch (cause) {
 			return fail(400, { message: cause instanceof Error ? cause.message : 'Die Übung konnte nicht abgegeben werden.' });
+		}
+	},
+	selfGrade: async ({ locals, params, request }) => {
+		const actor = requireActor(locals);
+		const parsedId = attemptIdSchema.safeParse(params.attemptId);
+		const parsed = z.object({ answerId: z.coerce.number().int().positive(), awardedPoints: z.coerce.number().min(0) }).safeParse(Object.fromEntries(await request.formData()));
+		if (!parsedId.success || !parsed.success) return fail(400, { message: 'Die Selbstbewertung ist ungültig.' });
+		try {
+			await selfGradeAnswer(actor.userId, parsedId.data, parsed.data.answerId, parsed.data.awardedPoints);
+			return { selfGraded: true };
+		} catch (cause) {
+			return fail(400, { message: cause instanceof Error ? cause.message : 'Die Selbstbewertung konnte nicht gespeichert werden.' });
 		}
 	}
 };

@@ -8,6 +8,7 @@ import {
 } from '$lib/server/db/schema';
 import { learnerQuestionSelection, toLearnerQuestion } from '$lib/server/learner-content';
 import type { AnswerPayload } from '$lib/types/questions';
+import { isAiEligibleMiss, processAiGradesForAttempt, queueAiGrade } from '$lib/server/ai-grading.server';
 
 export interface PracticeFilters {
 	curriculumId?: number;
@@ -111,10 +112,10 @@ export async function getPracticeAttempt(userId: string, attemptId: number) {
 			.where(eq(sources.taskVersionId, attempt.taskVersionId)).orderBy(asc(sources.position)),
 		db.select(learnerQuestionSelection).from(questions).where(eq(questions.taskVersionId, attempt.taskVersionId)).orderBy(asc(questions.position)),
 		db.select({
-			questionId: attemptAnswers.questionId, response: attemptAnswers.response, lastSavedAt: attemptAnswers.lastSavedAt,
+			id: attemptAnswers.id, questionId: attemptAnswers.questionId, response: attemptAnswers.response, lastSavedAt: attemptAnswers.lastSavedAt,
+			status: attemptAnswers.status,
 			awardedPoints: attemptAnswers.awardedPoints, feedback: attemptAnswers.feedback,
-			result: gradingRuns.result
-		}).from(attemptAnswers).leftJoin(gradingRuns, and(eq(gradingRuns.attemptAnswerId, attemptAnswers.id), eq(gradingRuns.method, 'deterministic'), eq(gradingRuns.status, 'graded')))
+		}).from(attemptAnswers)
 			.where(eq(attemptAnswers.attemptTaskId, attempt.attemptTaskId)),
 		db.select({ name: topics.name }).from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId))
 			.where(eq(taskVersionTopics.taskVersionId, attempt.taskVersionId)).orderBy(asc(topics.name))
@@ -127,10 +128,12 @@ export async function getPracticeAttempt(userId: string, attemptId: number) {
 		questions: questionRows.map(toLearnerQuestion),
 		answers: answerRows.map((answer) => ({ questionId: answer.questionId, response: answer.response, lastSavedAt: answer.lastSavedAt })),
 		results: isSubmitted ? answerRows.map((answer) => ({
+			answerId: answer.id,
 			questionId: answer.questionId,
+			status: answer.status,
 			score: answer.awardedPoints ?? 0,
-			maximum: Number((answer.result as { maximum?: unknown } | null)?.maximum ?? questionRows.find((question) => question.id === answer.questionId)?.maxPoints ?? 0),
-			correctness: ((answer.result as { correctness?: unknown } | null)?.correctness ?? 'invalid') as DeterministicGrade['correctness'],
+			maximum: Number(questionRows.find((question) => question.id === answer.questionId)?.maxPoints ?? 0),
+			correctness: (answer.status === 'needs_review' ? 'invalid' : Number(answer.awardedPoints) >= Number(questionRows.find((question) => question.id === answer.questionId)?.maxPoints ?? 0) ? 'correct' : answer.awardedPoints && answer.awardedPoints > 0 ? 'partial' : 'incorrect') as DeterministicGrade['correctness'],
 			feedback: answer.feedback ?? ''
 		})) : []
 	};
@@ -163,7 +166,7 @@ export async function savePracticeAnswer(userId: string, attemptId: number, ques
 }
 
 export async function submitPracticeAttempt(userId: string, attemptId: number) {
-	return getDb().transaction(async (transaction) => {
+	const prepared = await getDb().transaction(async (transaction) => {
 		const [attempt] = await transaction.select({
 			id: assessmentAttempts.id, status: assessmentAttempts.status, attemptTaskId: attemptTasks.id,
 			taskVersionId: attemptTasks.taskVersionId, maxScore: assessmentAttempts.maxScore
@@ -171,7 +174,8 @@ export async function submitPracticeAttempt(userId: string, attemptId: number) {
 			.where(and(eq(assessmentAttempts.id, attemptId), eq(assessmentAttempts.userId, userId), eq(assessmentAttempts.kind, 'practice')))
 			.for('update');
 		if (!attempt) throw new Error('Übungsversuch nicht gefunden.');
-		if (attempt.status === 'graded') return { score: Number((await transaction.select({ score: assessmentAttempts.score }).from(assessmentAttempts).where(eq(assessmentAttempts.id, attemptId)))[0]?.score ?? 0), maximum: attempt.maxScore };
+		if (attempt.status === 'graded') return { score: Number((await transaction.select({ score: assessmentAttempts.score }).from(assessmentAttempts).where(eq(assessmentAttempts.id, attemptId)))[0]?.score ?? 0), maximum: attempt.maxScore, hasAi: false };
+		if (attempt.status === 'submitted') return { score: 0, maximum: attempt.maxScore, hasAi: true };
 		if (attempt.status !== 'in_progress') throw new Error('Der Versuch wird bereits verarbeitet.');
 
 		const questionRows = await transaction.select().from(questions)
@@ -179,6 +183,7 @@ export async function submitPracticeAttempt(userId: string, attemptId: number) {
 		const existing = await transaction.select().from(attemptAnswers).where(eq(attemptAnswers.attemptTaskId, attempt.attemptTaskId));
 		const byQuestion = new Map(existing.map((answer) => [answer.questionId, answer]));
 		let total = 0;
+		let hasAi = false;
 		for (const question of questionRows) {
 			let answer = byQuestion.get(question.id);
 			if (!answer) {
@@ -188,6 +193,11 @@ export async function submitPracticeAttempt(userId: string, attemptId: number) {
 				}).returning();
 			}
 			const grade = gradeDeterministically(question, answer.response);
+			if (isAiEligibleMiss(question, answer.response, grade.correctness === 'correct')) {
+				hasAi = true;
+				await queueAiGrade(transaction, answer.id, question, answer.response);
+				continue;
+			}
 			const auditResult = {
 				...grade,
 				inputHash: deterministicInputHash({
@@ -198,7 +208,7 @@ export async function submitPracticeAttempt(userId: string, attemptId: number) {
 			};
 			await transaction.insert(gradingRuns).values({
 				attemptAnswerId: answer.id, method: 'deterministic', status: 'graded',
-				graderSchemaVersion: DETERMINISTIC_GRADER_SCHEMA_VERSION, result: auditResult,
+				graderSchemaVersion: DETERMINISTIC_GRADER_SCHEMA_VERSION, inputHash: auditResult.inputHash, result: auditResult,
 				awardedPoints: grade.score, feedback: grade.feedback, durationMs: 0, completedAt: new Date()
 			});
 			await transaction.update(attemptAnswers).set({
@@ -208,10 +218,13 @@ export async function submitPracticeAttempt(userId: string, attemptId: number) {
 		}
 		const score = Math.min(attempt.maxScore, Math.round((total + Number.EPSILON) * 100) / 100);
 		await transaction.update(assessmentAttempts).set({
-			status: 'graded', submittedAt: new Date(), score
+			status: hasAi ? 'submitted' : 'graded', submittedAt: new Date(), score: hasAi ? null : score
 		}).where(eq(assessmentAttempts.id, attempt.id));
-		return { score, maximum: attempt.maxScore };
+		return { score, maximum: attempt.maxScore, hasAi };
 	});
+	if (prepared.hasAi) await processAiGradesForAttempt(userId, attemptId);
+	const [current] = await getDb().select({ score: assessmentAttempts.score, status: assessmentAttempts.status }).from(assessmentAttempts).where(eq(assessmentAttempts.id, attemptId));
+	return { score: Number(current?.score ?? prepared.score), maximum: prepared.maximum, pendingReview: current?.status === 'submitted' };
 }
 
 export async function getBestPracticeScore(userId: string, taskVersionId: number) {
