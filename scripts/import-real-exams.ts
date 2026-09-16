@@ -158,7 +158,7 @@ try {
 					insert into app_private.task_versions
 						(task_id, version, status, title, instructions, curriculum_id, period_id, exam_session_id, max_points, exam_position, published_at)
 					values
-						(${createdTask.id}, 1, 'published', ${task.title}, 'Offizielle deutschsprachige Abituraufgabe. Bearbeiten Sie alle auf den Originalseiten gezeigten Teilaufgaben und geben Sie Ihre Antworten in derselben Reihenfolge ein.', ${curriculumIds.get(task.curriculumCode)!}, ${periodId}, ${session.id}, ${task.maximumPoints}, ${task.number}, now())
+						(${createdTask.id}, 1, 'draft', ${task.title}, 'Offizielle deutschsprachige Abituraufgabe. Bearbeiten Sie alle auf den Originalseiten gezeigten Teilaufgaben und geben Sie Ihre Antworten in derselben Reihenfolge ein.', ${curriculumIds.get(task.curriculumCode)!}, ${periodId}, ${session.id}, ${task.maximumPoints}, ${task.number}, null)
 					returning id
 				`;
 				await transaction`insert into app_private.task_version_topics (task_version_id, topic_id) values (${version.id}, ${topicId})`;
@@ -177,6 +177,12 @@ try {
 				await transaction`
 					insert into app_private.questions (task_version_id, position, kind, prompt, config, grading_rule, max_points)
 					values (${version.id}, 0, 'short_text', 'Antworten zu allen Teilaufgaben', ${transaction.json({ kind: 'short_text', multiline: true, maximumLength: 8000 })}, ${transaction.json({ kind: 'short_text', acceptedAnswers: [], criteria: [task.rubric], aiEligible: true, normalizeWhitespace: true })}, ${task.maximumPoints})
+				`;
+
+				await transaction`
+					update app_private.task_versions
+					set status = 'published', published_at = now()
+					where id = ${version.id}
 				`;
 			}
 		}
