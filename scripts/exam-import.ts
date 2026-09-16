@@ -55,6 +55,24 @@ const manifestPath = join(jobDir, 'manifest.json');
 const json = async <T>(path: string) => JSON.parse(await readFile(path, 'utf8')) as T;
 const hash = async (path: string) => createHash('sha256').update(await readFile(path)).digest('hex');
 
+function retryDelayMs(response: Response, body: string, attempt: number) {
+	const retryAfter = response.headers.get('retry-after');
+	if (retryAfter) {
+		const seconds = Number(retryAfter);
+		if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1000);
+		const timestamp = Date.parse(retryAfter);
+		if (!Number.isNaN(timestamp)) return Math.max(0, timestamp - Date.now());
+	}
+	const retryInfo = /"retryDelay"\s*:\s*"([\d.]+)s"/u.exec(body);
+	if (retryInfo) {
+		const seconds = Number(retryInfo[1]);
+		if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1000);
+	}
+	return Math.min(60_000, 1_000 * 2 ** attempt);
+}
+
+const wait = (milliseconds: number) => new Promise<void>((resolveWait) => setTimeout(resolveWait, milliseconds));
+
 function run(commandName: string, args: string[]) {
 	return new Promise<void>((resolveRun, reject) => {
 		const child = spawn(commandName, args, { cwd: root, stdio: 'inherit' });
@@ -77,22 +95,50 @@ async function generateContent(prompt: string, parts: Array<{ mimeType: string; 
 	const key = process.env.GEMINI_API_KEY;
 	if (!key) throw new Error('GEMINI_API_KEY is required.');
 	const model = process.env.GEMINI_IMPORT_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash-lite';
-	const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-		method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-		body: JSON.stringify({ systemInstruction: { parts: [{ text: 'You are an exacting official Hungarian history-exam conversion system. Preserve original-language text. Use only evidence in supplied pages and official solutions. Never invent a fact, image, answer, source, or point value. Return JSON only.' }] }, contents: [{ role: 'user', parts: [{ text: prompt }, ...parts.map((part) => ({ inlineData: { mimeType: part.mimeType, data: part.bytes.toString('base64') } }))] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0, maxOutputTokens: 32000 } })
-	});
-	if (!response.ok) throw new GeminiGenerationError(`Gemini request failed: ${response.status} ${await response.text()}`);
-	const payload = await response.json() as { candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> } }>; promptFeedback?: unknown };
-	const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text).find((part): part is string => Boolean(part));
-	if (!text) throw new GeminiGenerationError(`Gemini returned no JSON: ${JSON.stringify({ finishReason: payload.candidates?.[0]?.finishReason, promptFeedback: payload.promptFeedback })}`, payload.candidates?.[0]?.finishReason);
-	return JSON.parse(text) as unknown;
+	const retries = Math.max(0, Number.parseInt(process.env.GEMINI_IMPORT_MAX_RETRIES ?? '3', 10) || 0);
+	for (let attempt = 0; attempt <= retries; attempt += 1) {
+		const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+			method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+			body: JSON.stringify({ systemInstruction: { parts: [{ text: 'You are an exacting official Hungarian history-exam conversion system. Preserve original-language text. Use only evidence in supplied pages and official solutions. Never invent a fact, image, answer, source, or point value. Return JSON only.' }] }, contents: [{ role: 'user', parts: [{ text: prompt }, ...parts.map((part) => ({ inlineData: { mimeType: part.mimeType, data: part.bytes.toString('base64') } }))] }], generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0, maxOutputTokens: 32000 } })
+		});
+		if (!response.ok) {
+			const body = await response.text();
+			if (response.status !== 429) throw new GeminiGenerationError(`Gemini request failed: ${response.status} ${body}`);
+			if (attempt === retries) throw new GeminiGenerationError(`Gemini remained rate limited after ${retries} automatic retries. Retry later or increase GEMINI_IMPORT_MAX_RETRIES. Last response: ${body}`);
+			const delay = retryDelayMs(response, body, attempt);
+			console.warn(`Gemini rate limited; retrying request ${attempt + 1}/${retries} in ${Math.ceil(delay / 1000)} seconds.`);
+			await wait(delay);
+			continue;
+		}
+		const payload = await response.json() as { candidates?: Array<{ finishReason?: string; content?: { parts?: Array<{ text?: string }> } }>; promptFeedback?: unknown };
+		const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text).find((part): part is string => Boolean(part));
+		if (!text) throw new GeminiGenerationError(`Gemini returned no JSON: ${JSON.stringify({ finishReason: payload.candidates?.[0]?.finishReason, promptFeedback: payload.promptFeedback })}`, payload.candidates?.[0]?.finishReason);
+		return JSON.parse(text) as unknown;
+	}
+	throw new Error('Unreachable Gemini retry state.');
+}
+
+function normalizeSlug(value: string) {
+	return value
+		.trim()
+		.toLocaleLowerCase('de')
+		.replace(/ß/gu, 'ss')
+		.normalize('NFKD')
+		.replace(/\p{Mark}/gu, '')
+		.replace(/[^a-z0-9]+/gu, '-')
+		.replace(/^-+|-+$/gu, '');
 }
 
 function normalizeTaskOutput(value: unknown) {
 	if (!value || typeof value !== 'object' || !Array.isArray((value as { questions?: unknown }).questions)) return value;
-	const { officialMaxPoints: _ignoredOfficialMaxPoints, ...draft } = value as { officialMaxPoints?: unknown; questions: Array<Record<string, unknown>> };
+	const { officialMaxPoints: _ignoredOfficialMaxPoints, ...draft } = value as { officialMaxPoints?: unknown; questions: Array<Record<string, unknown>>; topics?: unknown };
 	return {
 		...draft,
+		topics: Array.isArray(draft.topics)
+			? draft.topics.map((topic) => topic && typeof topic === 'object' && typeof (topic as { slug?: unknown }).slug === 'string'
+				? { ...(topic as Record<string, unknown>), slug: normalizeSlug((topic as { slug: string }).slug) }
+				: topic)
+			: draft.topics,
 		questions: draft.questions.map((question) => {
 			const kind = question.kind;
 			return {
@@ -116,7 +162,7 @@ async function generate() {
 	const mapPath = join(aiDir, 'exam-map.json');
 	const map = await stat(mapPath).then(() => json(mapPath).then((value) => examMap.parse(value))).catch(async (error: unknown) => {
 		if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-		const mapRaw = await generateContent('Create an exam map for the supplied official question and solution PDFs. Identify exactly the 12 short-answer tasks (exclude essay section), exact totals, the relevant question and solution page IDs. page IDs are assigned by page order: exam-001... and solution-001....', [{ mimeType: 'application/pdf', bytes: await readFile(join(sourceDir, 'feladatsor.pdf')) }, { mimeType: 'application/pdf', bytes: await readFile(join(sourceDir, 'megoldas.pdf')) }], z.toJSONSchema(examMap));
+		const mapRaw = await generateContent('Create an exam map for the supplied official question and solution PDFs. Identify exactly the 12 short-answer tasks (exclude the essay section), their exact point totals, and the relevant question and solution page IDs. officialTotalPoints must be the sum of those 12 short-answer task totals only; do not use the full paper total if it includes essays. Page IDs are assigned by page order: exam-001... and solution-001....', [{ mimeType: 'application/pdf', bytes: await readFile(join(sourceDir, 'feladatsor.pdf')) }, { mimeType: 'application/pdf', bytes: await readFile(join(sourceDir, 'megoldas.pdf')) }], z.toJSONSchema(examMap));
 		const generated = examMap.parse(mapRaw); await writeFile(mapPath, JSON.stringify(generated, null, 2)); return generated;
 	});
 	const taskLimit = Math.max(1, Number.parseInt(process.env.GEMINI_IMPORT_TASK_LIMIT ?? '12', 10) || 12);
@@ -131,14 +177,16 @@ async function generate() {
 		if (generatedCount >= taskLimit) break;
 		const pageRefs = [...entry.examPageRefs, ...entry.solutionPageRefs];
 		const parts = await Promise.all(pageRefs.map(async (id) => ({ mimeType: 'image/webp', bytes: await readFile(join(pagesDir, `${id}.webp`)) })));
-		const commonPrompt = `Convert task ${entry.position} into the exact requested AbiPro JSON. Its official title is ${entry.title}; exact total is ${entry.maxPoints}. The image parts are in this order: ${pageRefs.join(', ')}. Do not return sources: original exam pages are attached separately and shown verbatim to learners. Solution-* pages are grading evidence only. Model every subquestion separately and make deterministic answer keys whenever official solutions permit. short_text.aiEligible may be true only for genuinely semantic answers. Question points must total ${entry.maxPoints}.`;
+		const commonPrompt = `Convert task ${entry.position} into the exact requested AbiPro JSON. Its official title is ${entry.title}; exact total is ${entry.maxPoints}. The image parts are in this order: ${pageRefs.join(', ')}. Do not return sources: original exam pages are attached separately and shown verbatim to learners. Solution-* pages are grading evidence only. Model every subquestion separately and make deterministic answer keys whenever official solutions permit. A matching pair has exactly one left and one right endpoint: never use a left ID more than once. If an official prompt assigns multiple answers to one item, expand it into separately labelled rows (for example, “Photo A — first answer” and “Photo A — second answer”). short_text.aiEligible may be true only for genuinely semantic answers. Question points must total ${entry.maxPoints}.`;
 		const taskRaw = await generateContent(commonPrompt, parts, z.toJSONSchema(taskForGemini));
 		const normalized = normalizeTaskOutput(taskRaw);
 		try { await writeFile(join(aiDir, `task-${String(entry.position).padStart(2, '0')}.raw.json`), JSON.stringify(taskRaw, null, 2)); } catch { /* diagnostic output must not block a valid draft */ }
 		let parsed = task.parse({ ...normalized as object, sources: originalPageSources(entry.examPageRefs) });
-		if (parsed.position !== entry.position || parsed.maxPoints !== entry.maxPoints) throw new Error(`Task ${entry.position} metadata disagrees with the exam map.`);
+		if (parsed.position !== entry.position) throw new Error(`Task ${entry.position} position disagrees with the exam map.`);
 		const rubricPoints = parsed.questions.reduce((sum, item) => sum + item.maxPoints, 0);
-		if (Math.abs(rubricPoints - parsed.maxPoints) > 0.001) parsed = { ...parsed, officialMaxPoints: parsed.maxPoints, maxPoints: rubricPoints };
+		if (parsed.maxPoints !== entry.maxPoints && Math.abs(rubricPoints - parsed.maxPoints) > 0.001) throw new Error(`Task ${entry.position} total disagrees with the exam map.`);
+		if (parsed.maxPoints !== entry.maxPoints) parsed = { ...parsed, officialMaxPoints: entry.maxPoints, maxPoints: rubricPoints };
+		else if (Math.abs(rubricPoints - parsed.maxPoints) > 0.001) parsed = { ...parsed, officialMaxPoints: parsed.maxPoints, maxPoints: rubricPoints };
 		await writeFile(taskPath, JSON.stringify(parsed, null, 2));
 		generatedCount += 1;
 		console.log(`Generated task ${entry.position}.`);
@@ -164,7 +212,7 @@ function validateTask(value: Task, knownPages: Set<string>) {
 		}
 		if (item.config.kind === 'matching' && item.gradingRule.kind === 'matching') {
 			const left = new Set(item.config.left.map((x) => x.id)), right = new Set(item.config.right.map((x) => x.id));
-			if (item.gradingRule.pairs.length !== left.size || item.gradingRule.pairs.some((pair) => !left.has(pair.leftId) || !right.has(pair.rightId)) || new Set(item.gradingRule.pairs.map((pair) => pair.leftId)).size !== left.size || new Set(item.gradingRule.pairs.map((pair) => pair.rightId)).size !== item.gradingRule.pairs.length) problems.push('matching key is invalid');
+			if (item.gradingRule.pairs.some((pair) => !left.has(pair.leftId) || !right.has(pair.rightId)) || new Set(item.gradingRule.pairs.map((pair) => pair.leftId)).size !== item.gradingRule.pairs.length) problems.push('matching key is invalid');
 		}
 		if (item.config.kind === 'ordering' && item.gradingRule.kind === 'ordering' && (item.gradingRule.correctOrder.length !== ids.length || new Set(item.gradingRule.correctOrder).size !== ids.length || item.gradingRule.correctOrder.some((id) => !ids.includes(id)))) problems.push('ordering key is invalid');
 	}

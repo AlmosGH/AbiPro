@@ -19,6 +19,16 @@ describe('task authoring validation', () => {
 		expect(result.success).toBe(false);
 	});
 
+	it('accepts matching questions with unassigned distractors', () => {
+		const result = questionDraftSchema.safeParse({ kind: 'matching', prompt: 'Match?', config: { kind: 'matching', left: [option('correct'), option('distractor')], right: [option('answer')] }, gradingRule: { kind: 'matching', pairs: [{ leftId: 'correct', rightId: 'answer' }] }, maxPoints: 1 });
+		expect(result.success).toBe(true);
+	});
+
+	it('accepts matching questions that reuse a right-hand category', () => {
+		const result = questionDraftSchema.safeParse({ kind: 'matching', prompt: 'Match?', config: { kind: 'matching', left: [option('first'), option('second')], right: [option('category')] }, gradingRule: { kind: 'matching', pairs: [{ leftId: 'first', rightId: 'category' }, { leftId: 'second', rightId: 'category' }] }, maxPoints: 1 });
+		expect(result.success).toBe(true);
+	});
+
 	it('validates source-specific content', () => {
 		expect(sourceDraftSchema.safeParse({ kind: 'text', content: { text: 'Primary source' } }).success).toBe(true);
 		expect(sourceDraftSchema.safeParse({ kind: 'table', content: { text: 'not a table' } }).success).toBe(false);

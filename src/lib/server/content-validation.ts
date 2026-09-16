@@ -76,8 +76,7 @@ export const questionDraftSchema = z.object({
 		const left = new Set(question.config.left.map((item) => item.id));
 		const right = new Set(question.config.right.map((item) => item.id));
 		if (question.gradingRule.pairs.some((pair) => !left.has(pair.leftId) || !right.has(pair.rightId))) context.addIssue({ code: 'custom', message: 'Mindestens ein Zuordnungspaar verweist auf eine unbekannte Option.' });
-		if (new Set(question.gradingRule.pairs.map((pair) => pair.leftId)).size !== question.gradingRule.pairs.length || new Set(question.gradingRule.pairs.map((pair) => pair.rightId)).size !== question.gradingRule.pairs.length) context.addIssue({ code: 'custom', message: 'Jede Option darf in der Lösung nur einmal zugeordnet werden.' });
-		if (question.gradingRule.pairs.length !== question.config.left.length) context.addIssue({ code: 'custom', message: 'Die Lösung muss jeden linken Eintrag genau einmal zuordnen.' });
+		if (new Set(question.gradingRule.pairs.map((pair) => pair.leftId)).size !== question.gradingRule.pairs.length) context.addIssue({ code: 'custom', message: 'Jeder linke Eintrag darf in der Lösung nur einmal zugeordnet werden.' });
 	}
 });
 

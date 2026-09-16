@@ -32,14 +32,30 @@ describe('deterministic grading', () => {
 		expect(grade(question, { kind: 'multiple_choice', optionIds: ['a', 'b', 'c'] }).correctness).toBe('invalid');
 	});
 
-	it('grades matching proportionally and rejects duplicate endpoints', () => {
+	it('grades matching proportionally and rejects duplicate left endpoints', () => {
 		const question: DeterministicQuestion = {
 			kind: 'matching', config: { kind: 'matching', left: [option('l1'), option('l2')], right: [option('r1'), option('r2')] },
 			gradingRule: { kind: 'matching', pairs: [{ leftId: 'l1', rightId: 'r1' }, { leftId: 'l2', rightId: 'r2' }] }, maxPoints: 3
 		};
-		expect(grade(question, { kind: 'matching', pairs: [{ leftId: 'l1', rightId: 'r1' }, { leftId: 'l2', rightId: 'r1' }] }).correctness).toBe('invalid');
+		expect(grade(question, { kind: 'matching', pairs: [{ leftId: 'l1', rightId: 'r1' }, { leftId: 'l1', rightId: 'r2' }] }).correctness).toBe('invalid');
 		expect(grade(question, { kind: 'matching', pairs: [{ leftId: 'l1', rightId: 'r1' }, { leftId: 'l2', rightId: 'r2' }] }).score).toBe(3);
 		expect(grade(question, { kind: 'matching', pairs: [{ leftId: 'l1', rightId: 'r1' }] })).toMatchObject({ score: 1.5, correctness: 'partial' });
+	});
+
+	it('grades matching questions with unassigned distractors', () => {
+		const question: DeterministicQuestion = {
+			kind: 'matching', config: { kind: 'matching', left: [option('correct'), option('distractor')], right: [option('answer')] },
+			gradingRule: { kind: 'matching', pairs: [{ leftId: 'correct', rightId: 'answer' }] }, maxPoints: 2
+		};
+		expect(grade(question, { kind: 'matching', pairs: [{ leftId: 'correct', rightId: 'answer' }] })).toMatchObject({ score: 2, correctness: 'correct' });
+	});
+
+	it('grades matching questions that reuse a right-hand category', () => {
+		const question: DeterministicQuestion = {
+			kind: 'matching', config: { kind: 'matching', left: [option('first'), option('second')], right: [option('category')] },
+			gradingRule: { kind: 'matching', pairs: [{ leftId: 'first', rightId: 'category' }, { leftId: 'second', rightId: 'category' }] }, maxPoints: 2
+		};
+		expect(grade(question, { kind: 'matching', pairs: [{ leftId: 'first', rightId: 'category' }, { leftId: 'second', rightId: 'category' }] })).toMatchObject({ score: 2, correctness: 'correct' });
 	});
 
 	it('requires an exact complete ordering', () => {

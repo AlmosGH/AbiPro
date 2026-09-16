@@ -113,13 +113,11 @@ export function gradeDeterministically(question: DeterministicQuestion, answer: 
 			const rightIds = new Set(question.config.right.map((item) => item.id));
 			if (leftIds.size !== question.config.left.length || rightIds.size !== question.config.right.length || new Set([...leftIds, ...rightIds]).size !== leftIds.size + rightIds.size) return invalid(maximum, 'Die serverseitige Fragenkonfiguration ist ungültig.');
 			const answerLeft = payload.pairs.map((pair) => pair.leftId);
-			const answerRight = payload.pairs.map((pair) => pair.rightId);
-			if (hasDuplicates(answerLeft) || hasDuplicates(answerRight) || payload.pairs.some((pair) => !leftIds.has(pair.leftId) || !rightIds.has(pair.rightId))) {
-				return invalid(maximum, 'Die Zuordnung enthält doppelte oder unbekannte Einträge.');
+			if (hasDuplicates(answerLeft) || payload.pairs.some((pair) => !leftIds.has(pair.leftId) || !rightIds.has(pair.rightId))) {
+				return invalid(maximum, 'Die Zuordnung enthält doppelte linke oder unbekannte Einträge.');
 			}
 			const expected = new Map(question.gradingRule.pairs.map((pair) => [pair.leftId, pair.rightId]));
-			const expectedRight = new Set(question.gradingRule.pairs.map((pair) => pair.rightId));
-			if (!expected.size || expected.size !== question.gradingRule.pairs.length || expectedRight.size !== question.gradingRule.pairs.length || expected.size !== leftIds.size || [...expected].some(([leftId, rightId]) => !leftIds.has(leftId) || !rightIds.has(rightId))) {
+			if (!expected.size || expected.size !== question.gradingRule.pairs.length || [...expected].some(([leftId, rightId]) => !leftIds.has(leftId) || !rightIds.has(rightId))) {
 				return invalid(maximum, 'Die serverseitige Bewertungsregel ist ungültig.');
 			}
 			const correctPairs = payload.pairs.filter((pair) => expected.get(pair.leftId) === pair.rightId).length;

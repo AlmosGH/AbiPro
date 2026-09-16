@@ -1,12 +1,20 @@
-$examFolder = ".\erettsegik_2006_2026"
+$examFolder = "erettsegik_2006_2026"   # change if needed
 
 $sessions = Get-ChildItem $examFolder -Directory |
+    Where-Object { $_.Name -match '^\d{4}_(osz|tavasz)$' } |
     Sort-Object Name
 
 Write-Host "Found $($sessions.Count) exam sessions."
 
 foreach ($session in $sessions) {
     $name = $session.Name
+    $publishedMarker = Join-Path $session.FullName ".published"
+
+    # Skip exams we've already successfully published
+    if (Test-Path $publishedMarker) {
+        Write-Host "SKIP: $name already published."
+        continue
+    }
 
     Write-Host ""
     Write-Host "========================================"
@@ -34,11 +42,14 @@ foreach ($session in $sessions) {
         }
     }
 
+    # Only mark as published if ALL four steps succeeded
+    New-Item -ItemType File -Path $publishedMarker -Force | Out-Null
+
     Write-Host ""
-    Write-Host "✓ Finished $name"
+    Write-Host "DONE: $name"
 }
 
 Write-Host ""
 Write-Host "========================================"
-Write-Host "All exam sessions imported successfully."
+Write-Host "All remaining exam sessions imported."
 Write-Host "========================================"
