@@ -14,29 +14,37 @@
 		return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 	}
 	function rows(value: unknown) { return Array.isArray(value) ? value.map(stringArray) : []; }
+	function validTable(headers: string[], body: string[][]) {
+		return headers.length > 0 && body.length > 0 && body.every((row) => row.length === headers.length);
+	}
 </script>
 
 {#each sources as source (source.id)}
 	{@const content = record(source.content)}
+	{@const text = stringValue(content.text)}
+	{@const headers = stringArray(content.headers)}
+	{@const body = rows(content.rows)}
+	{@const hasStructuredText = source.kind === 'text' && text.length > 0}
+	{@const hasStructuredTable = source.kind === 'table' && validTable(headers, body)}
 	<article>
 		<h3>{source.title ?? `Quelle ${source.position + 1}`}</h3>
-		{#if source.kind === 'text'}
-			<p>{stringValue(content.text)}</p>
-		{:else if source.kind === 'table'}
+		{#if source.assetUrl}
+			<img src={source.assetUrl} alt={source.assetAltText || source.title || 'Originalseite der Aufgabe'} loading="lazy" />
+		{:else if stringValue(content.url)}
+			<img src={stringValue(content.url)} alt={stringValue(content.alt) || source.title || 'Quelle der Aufgabe'} loading="lazy" />
+		{:else if hasStructuredText}
+			<p>{text}</p>
+		{:else if hasStructuredTable}
 			<table>
-				<thead><tr>{#each stringArray(content.headers) as header (header)}<th>{header}</th>{/each}</tr></thead>
+				<thead><tr>{#each headers as header (header)}<th scope="col">{header}</th>{/each}</tr></thead>
 				<tbody>
-					{#each rows(content.rows) as row, rowIndex (`${source.id}-${rowIndex}`)}
+					{#each body as row, rowIndex (`${source.id}-${rowIndex}`)}
 						<tr>{#each row as cell, cellIndex (`${source.id}-${rowIndex}-${cellIndex}`)}<td>{cell}</td>{/each}</tr>
 					{/each}
 				</tbody>
 			</table>
-		{:else if source.assetUrl}
-			<img src={source.assetUrl} alt={source.assetAltText || source.title || ''} />
-		{:else if stringValue(content.url)}
-			<img src={stringValue(content.url)} alt={stringValue(content.alt) || source.title || ''} />
 		{:else}
-			<p>{source.kind === 'map' ? 'Karte' : 'Bild'} nicht verfügbar.</p>
+			<p>Quelle nicht verfügbar.</p>
 		{/if}
 	</article>
 {/each}

@@ -215,6 +215,19 @@ Run `npm test`, `npm run check`, and `npm run build` before committing changes.
 
 AI grading needs the server-only `GEMINI_API_KEY` from Google AI Studio. Exact accepted answers never call Gemini. Normal tests use fixture transports and never make live model calls. See `docs/operations.md` for release, backup, rollback, security, load-test, and usability procedures.
 
+## Importing official exams
+
+Official exams are imported one session at a time. The importer deliberately does not attempt to parse PDFs with heuristics: it renders every page, asks Gemini to map and convert one task at a time using the official solution pages as evidence, and only publishes a locally validated draft.
+
+```bash
+npm run exams:prepare -- 2006_tavasz
+npm run exams:generate -- 2006_tavasz
+npm run exams:validate -- 2006_tavasz
+npm run exams:publish -- 2006_tavasz
+```
+
+Jobs live in `tmp/exam-imports/<exam>/`. `prepare` is safe to repeat; `generate` requires `GEMINI_API_KEY` and optionally uses `GEMINI_IMPORT_MODEL` (otherwise `GEMINI_MODEL`). Review `review/report.json` before publishing. Publishing refuses invalid, stale, or previously imported tasks and never deletes unrelated content.
+
 The authenticated Playwright smoke test uses a dedicated learner account. Install Chromium once,
 set `E2E_USER_EMAIL` and `E2E_USER_PASSWORD`, then run:
 

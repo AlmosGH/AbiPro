@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import type { AiGradeInput, AiGraderTransport } from '$lib/grading/ai';
 
-export const GEMINI_MODEL = env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash-lite';
+export const GEMINI_MODEL = env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash-lite';
 
 const responseSchema = {
 	type: 'object',
