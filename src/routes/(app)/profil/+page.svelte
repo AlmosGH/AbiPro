@@ -1,18 +1,50 @@
 <script lang="ts">
+	import { Button, EmptyState, Progress } from '$lib/components/ui';
+	import { PageHeader, Section, StatCard } from '$lib/components/page';
 	import type { PageProps } from './$types';
-	let { data, form }: PageProps = $props();
+	let { data }: PageProps = $props();
 	const percent = (value: number | null) => value === null ? '–' : `${value} %`;
 </script>
 
-<svelte:head><title>Profil – AbiPro</title></svelte:head>
+<svelte:head><title>Fortschritt – AbiPro</title></svelte:head>
 <main>
-	<h1>Profil und Lernfortschritt</h1>
-	<form method="POST" action="?/updateName"><label>Anzeigename <input name="displayName" value={data.profile.displayName ?? ''} maxlength="80" required /></label> <button>Speichern</button></form>
-	{#if form?.message}<p role="alert">{form.message}</p>{/if}
-	<section aria-labelledby="overview"><h2 id="overview">Übersicht</h2><div class="stats-grid"><article><strong>{data.progress.overview.practiceCompleted}</strong><span>Übungsaufgaben abgeschlossen</span></article><article><strong>{data.progress.overview.mockExamsCompleted}</strong><span>Probeprüfungen abgeschlossen</span></article><article><strong>{percent(data.progress.overview.averagePercent)}</strong><span>Durchschnitt (bewertet)</span></article><article><strong>{percent(data.progress.overview.bestPercent)}</strong><span>Bestes Ergebnis</span></article></div>{#if data.progress.overview.pendingAi}<p>{data.progress.overview.pendingAi} Versuch(e) warten auf KI- oder Selbstbewertung und sind nicht im Durchschnitt enthalten.</p>{/if}</section>
-	<section><h2>Letzte Aktivitäten</h2>{#if data.progress.recent.length}<ul>{#each data.progress.recent as attempt (attempt.id)}<li><a href={`/profil/versuche/${attempt.id}`}>{attempt.title}</a> · {attempt.kind === 'practice' ? 'Übung' : 'Probeprüfung'} · {attempt.status === 'graded' ? `${attempt.score} / ${attempt.maxScore} Punkte` : 'Bewertung ausstehend'}</li>{/each}</ul>{:else}<p>Noch keine abgegebenen Versuche.</p>{/if}</section>
-	<section><h2>Nach Epoche</h2>{#if data.progress.periods.length}<table><thead><tr><th>Epoche</th><th>Versuche</th><th>Ø bewertet</th></tr></thead><tbody>{#each data.progress.periods as row (row.name)}<tr><td>{row.name}</td><td>{row.attempts}</td><td>{percent(row.averagePercent)}</td></tr>{/each}</tbody></table>{:else}<p>Noch keine Daten.</p>{/if}</section>
-	<section><h2>Nach Thema</h2>{#if data.progress.topics.length}<table><thead><tr><th>Thema</th><th>Versuche</th><th>Ø bewertet</th></tr></thead><tbody>{#each data.progress.topics as row (row.name)}<tr><td>{row.name}</td><td>{row.attempts}</td><td>{percent(row.averagePercent)}</td></tr>{/each}</tbody></table>{:else}<p>Noch keine Daten.</p>{/if}</section>
-	<section><h2>Kontodaten</h2><p><a href="/profil/export">Meine Daten als JSON exportieren</a></p><details><summary>Konto und alle Lerndaten löschen</summary><form method="POST" action="?/deleteAccount"><p>Diese Aktion ist endgültig. Gib <strong>LÖSCHEN</strong> ein.</p><label>Bestätigung <input name="confirmation" autocomplete="off" required /></label> <button class="danger">Konto endgültig löschen</button></form></details></section>
-	<section><h2>Berechnungsregeln</h2><p>„Abgeschlossen“ zählt nur abgegebene oder vollständig bewertete Versuche. Durchschnitt und Bestwert verwenden nur vollständig bewertete Versuche; ausstehende KI-Bewertungen werden separat gezeigt. „Bestes“ vergleicht alle bewerteten Versuche, während die Aktivitätsliste den neuesten Versuch zeigt. Historische Versuche behalten ihre damals verwendete Aufgabenversion und bleiben auch bei archivierten Aufgaben oder zurückgezogenen Versionen sichtbar.</p></section>
+	<PageHeader eyebrow="Lernanalyse" title="Dein Fortschritt" description="Erkenne, was schon sicher sitzt und wo sich die nächste Übung besonders lohnt.">
+		{#snippet actions()}<Button href="/einstellungen" variant="secondary">Einstellungen</Button>{/snippet}
+	</PageHeader>
+	<div class="stats">
+		<StatCard label="Übungen abgeschlossen" value={data.progress.overview.practiceCompleted} icon="check" />
+		<StatCard label="Probeprüfungen" value={data.progress.overview.mockExamsCompleted} icon="clock" />
+		<StatCard label="Bewerteter Durchschnitt" value={percent(data.progress.overview.averagePercent)} icon="chart" />
+		<StatCard label="Bestes Ergebnis" value={percent(data.progress.overview.bestPercent)} icon="spark" tone="accent" />
+	</div>
+	<Section title="Letzte Aktivitäten">
+		{#if data.progress.recent.length}
+			<div class="activity-list">{#each data.progress.recent as attempt (attempt.id)}<a href={`/profil/versuche/${attempt.id}`}><span><strong>{attempt.title}</strong><small>{attempt.kind === 'practice' ? 'Übung' : 'Probeprüfung'}</small></span><b>{attempt.status === 'graded' ? `${attempt.score} / ${attempt.maxScore}` : 'Ausstehend'}</b></a>{/each}</div>
+		{:else}<EmptyState title="Noch keine Ergebnisse" description="Nach deiner ersten abgeschlossenen Übung erscheint hier deine Lernhistorie." />{/if}
+	</Section>
+	<div class="analysis-grid">
+		<Section title="Nach Thema">
+			{#if data.progress.topics.length}<div class="bars">{#each data.progress.topics as row (row.id)}<div><Progress value={row.averagePercent ?? 0} label={`${row.name} · ${row.attempts} ${row.attempts === 1 ? 'Versuch' : 'Versuche'}`} /></div>{/each}</div>{:else}<EmptyState title="Noch keine Themendaten" description="Bewertete Übungen werden automatisch nach Thema ausgewertet." />{/if}
+		</Section>
+		<Section title="Nach Epoche">
+			{#if data.progress.periods.length}<div class="bars">{#each data.progress.periods as row (row.name)}<div><Progress value={row.averagePercent ?? 0} label={`${row.name} · ${row.attempts} ${row.attempts === 1 ? 'Versuch' : 'Versuche'}`} /></div>{/each}</div>{:else}<EmptyState title="Noch keine Epochendaten" description="Bewertete Übungen werden automatisch nach Epoche ausgewertet." />{/if}
+		</Section>
+	</div>
+	{#if data.progress.overview.pendingAi}<p class="pending">{data.progress.overview.pendingAi} Bewertung(en) werden noch verarbeitet und sind im Durchschnitt noch nicht enthalten.</p>{/if}
 </main>
+
+<style>
+	.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); }
+	.activity-list { overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+	.activity-list a { display: flex; min-height: 4.5rem; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) var(--space-5); color: var(--color-ink); text-decoration: none; }
+	.activity-list a + a { border-top: 1px solid var(--color-border); }
+	.activity-list a:hover { background: var(--color-surface-soft); }
+	.activity-list span { display: grid; gap: var(--space-1); }
+	.activity-list small { color: var(--color-muted); }
+	.activity-list b { color: var(--color-brand-strong); white-space: nowrap; }
+	.analysis-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-6); }
+	.bars { display: grid; gap: var(--space-5); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+	.pending { margin-top: var(--space-6); padding: var(--space-4); border-radius: var(--radius-md); background: var(--color-warning-soft); color: var(--color-warning); }
+	@media(max-width: 65rem) { .stats { grid-template-columns: repeat(2, 1fr); } .analysis-grid { grid-template-columns: 1fr; } }
+	@media(max-width: 35rem) { .stats { grid-template-columns: 1fr; } }
+</style>

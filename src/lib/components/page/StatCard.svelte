@@ -1,0 +1,6 @@
+<script lang="ts">
+	import Icon from '$lib/components/ui/Icon.svelte';
+	let { label, value, detail, icon = 'chart', tone = 'brand' }: { label: string; value: string | number; detail?: string; icon?: 'chart' | 'clock' | 'check' | 'spark'; tone?: 'brand' | 'accent' } = $props();
+</script>
+<article class:accent={tone === 'accent'}><span class="icon"><Icon name={icon} /></span><div><strong>{value}</strong><p>{label}</p>{#if detail}<small>{detail}</small>{/if}</div></article>
+<style>article { display: flex; min-height: 9rem; gap: var(--space-4); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); } .icon { display: grid; width: 2.5rem; height: 2.5rem; flex: none; place-items: center; border-radius: var(--radius-md); background: var(--color-brand-soft); color: var(--color-brand); } article.accent .icon { background: var(--color-accent-soft); color: var(--color-accent); } strong { display: block; margin-bottom: .15rem; font-family: var(--font-display); font-size: 2rem; color: var(--color-ink); } p { margin: 0; color: var(--color-muted); line-height: 1.35; } small { display: block; margin-top: var(--space-2); color: var(--color-subtle); }</style>

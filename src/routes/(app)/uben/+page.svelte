@@ -33,7 +33,7 @@
 					<select name="periodId"><option value="">Alle</option>{#each data.periods as item (item.id)}<option value={item.id}>{item.name}</option>{/each}</select>
 				</label>
 				<label>Thema
-					<select name="topicId"><option value="">Alle</option>{#each data.topics as item (item.id)}<option value={item.id}>{item.name}</option>{/each}</select>
+					<select name="topicId"><option value="">Alle</option>{#each data.topics as item (item.id)}<option value={item.id} selected={data.requestedTopicId === item.id}>{item.name}</option>{/each}</select>
 				</label>
 				<label><input type="checkbox" name="onlyNotPracticed" /> Nur noch nicht geübte Aufgaben</label>
 			{/if}

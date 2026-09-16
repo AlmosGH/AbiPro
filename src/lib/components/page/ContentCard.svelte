@@ -1,0 +1,6 @@
+<script lang="ts">
+	import type { Snippet } from 'svelte';
+	let { title, eyebrow, meta, children, footer }: { title: string; eyebrow?: string; meta?: string; children?: Snippet; footer?: Snippet } = $props();
+</script>
+<article>{#if eyebrow}<span>{eyebrow}</span>{/if}<h3>{title}</h3>{#if meta}<p class="meta">{meta}</p>{/if}{#if children}<div class="content">{@render children()}</div>{/if}{#if footer}<footer>{@render footer()}</footer>{/if}</article>
+<style>article { display: flex; min-height: 100%; flex-direction: column; padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); transition: border-color var(--duration-fast), transform var(--duration-fast); } article:hover { border-color: var(--color-border-strong); transform: translateY(-1px); } article > span { color: var(--color-brand); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; } h3 { margin: var(--space-2) 0; font-size: 1.08rem; } .meta { margin: 0; color: var(--color-muted); font-size: .85rem; } .content { margin-top: var(--space-4); color: var(--color-muted); } footer { margin-top: auto; padding-top: var(--space-5); }</style>

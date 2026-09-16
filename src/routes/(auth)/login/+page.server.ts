@@ -5,11 +5,11 @@ import type { Actions, PageServerLoad } from './$types';
 const loginSchema = z.object({ email: z.email(), password: z.string().min(1), next: z.string().optional() });
 
 function safeNext(value: string | undefined) {
-	return value?.startsWith('/') && !value.startsWith('//') ? value : '/profil';
+	return value?.startsWith('/') && !value.startsWith('//') ? value : '/';
 }
 
 export const load: PageServerLoad = ({ locals, url }) => {
-	if (locals.userId && locals.profile) redirect(303, '/profil');
+	if (locals.userId && locals.profile) redirect(303, '/');
 	return {
 		next: safeNext(url.searchParams.get('next') ?? undefined),
 		callbackFailed: url.searchParams.get('callback') === 'failed'

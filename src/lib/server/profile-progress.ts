@@ -11,7 +11,8 @@ export async function getProfileProgress(userId: string) {
 			mockExamsCompleted: sql<number>`count(*) filter (where ${assessmentAttempts.kind} = 'mock_exam')::int`,
 			averagePercent: sql<number | null>`round(avg(100 * ${assessmentAttempts.score} / ${assessmentAttempts.maxScore}) filter (where ${assessmentAttempts.status} = 'graded'), 1)::float`,
 			bestPercent: sql<number | null>`round(max(100 * ${assessmentAttempts.score} / ${assessmentAttempts.maxScore}) filter (where ${assessmentAttempts.status} = 'graded'), 1)::float`,
-			pendingAi: sql<number>`count(*) filter (where ${assessmentAttempts.status} = 'submitted')::int`
+			pendingAi: sql<number>`count(*) filter (where ${assessmentAttempts.status} = 'submitted')::int`,
+			weeklyCompleted: sql<number>`count(*) filter (where ${assessmentAttempts.submittedAt} >= now() - interval '7 days')::int`
 		}).from(assessmentAttempts).where(and(eq(assessmentAttempts.userId, userId), completed));
 	const recent = await db.select({ id: assessmentAttempts.id, kind: assessmentAttempts.kind, status: assessmentAttempts.status, submittedAt: assessmentAttempts.submittedAt, score: assessmentAttempts.score, maxScore: assessmentAttempts.maxScore, title: sql<string>`string_agg(${taskVersions.title}, ', ' order by ${attemptTasks.position})` })
 			.from(assessmentAttempts).innerJoin(attemptTasks, eq(attemptTasks.attemptId, assessmentAttempts.id)).innerJoin(taskVersions, eq(taskVersions.id, attemptTasks.taskVersionId))
@@ -19,10 +20,10 @@ export async function getProfileProgress(userId: string) {
 	const periods = await db.select({ name: historicalPeriods.name, attempts: countDistinct(assessmentAttempts.id), averagePercent: sql<number | null>`round(100 * sum(${attemptAnswers.awardedPoints}) filter (where ${assessmentAttempts.status} = 'graded') / nullif(sum(${questions.maxPoints}) filter (where ${assessmentAttempts.status} = 'graded'), 0), 1)::float` })
 			.from(assessmentAttempts).innerJoin(attemptTasks, eq(attemptTasks.attemptId, assessmentAttempts.id)).innerJoin(taskVersions, eq(taskVersions.id, attemptTasks.taskVersionId)).innerJoin(historicalPeriods, eq(historicalPeriods.id, taskVersions.periodId)).innerJoin(questions, eq(questions.taskVersionId, taskVersions.id)).leftJoin(attemptAnswers, and(eq(attemptAnswers.attemptTaskId, attemptTasks.id), eq(attemptAnswers.questionId, questions.id)))
 			.where(and(eq(assessmentAttempts.userId, userId), completed)).groupBy(historicalPeriods.id).orderBy(asc(historicalPeriods.position));
-	const topicRows = await db.select({ name: topics.name, attempts: countDistinct(assessmentAttempts.id), averagePercent: sql<number | null>`round(100 * sum(${attemptAnswers.awardedPoints}) filter (where ${assessmentAttempts.status} = 'graded') / nullif(sum(${questions.maxPoints}) filter (where ${assessmentAttempts.status} = 'graded'), 0), 1)::float` })
+	const topicRows = await db.select({ id: topics.id, name: topics.name, attempts: countDistinct(assessmentAttempts.id), averagePercent: sql<number | null>`round(100 * sum(${attemptAnswers.awardedPoints}) filter (where ${assessmentAttempts.status} = 'graded') / nullif(sum(${questions.maxPoints}) filter (where ${assessmentAttempts.status} = 'graded'), 0), 1)::float` })
 			.from(assessmentAttempts).innerJoin(attemptTasks, eq(attemptTasks.attemptId, assessmentAttempts.id)).innerJoin(taskVersionTopics, eq(taskVersionTopics.taskVersionId, attemptTasks.taskVersionId)).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId)).innerJoin(questions, eq(questions.taskVersionId, attemptTasks.taskVersionId)).leftJoin(attemptAnswers, and(eq(attemptAnswers.attemptTaskId, attemptTasks.id), eq(attemptAnswers.questionId, questions.id)))
 			.where(and(eq(assessmentAttempts.userId, userId), completed)).groupBy(topics.id).orderBy(asc(topics.name));
-	return { overview: overviewRows[0] ?? { practiceCompleted: 0, mockExamsCompleted: 0, averagePercent: null, bestPercent: null, pendingAi: 0 }, recent, periods, topics: topicRows };
+	return { overview: overviewRows[0] ?? { practiceCompleted: 0, mockExamsCompleted: 0, averagePercent: null, bestPercent: null, pendingAi: 0, weeklyCompleted: 0 }, recent, periods, topics: topicRows };
 }
 
 export async function getAttemptHistoryDetail(userId: string, attemptId: number) {

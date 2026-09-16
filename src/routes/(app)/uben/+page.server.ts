@@ -15,7 +15,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	return {
 		...references,
 		resumableAttempts,
-		requestedTaskSlug: url.searchParams.get('task')?.trim() || null
+		requestedTaskSlug: url.searchParams.get('task')?.trim() || null,
+		requestedTopicId: optionalId.safeParse(url.searchParams.get('topicId')).data ?? null
 	};
 };
 

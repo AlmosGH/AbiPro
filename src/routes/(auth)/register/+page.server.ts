@@ -5,7 +5,7 @@ import type { Actions, PageServerLoad } from './$types';
 const registrationSchema = z.object({ displayName: z.string().trim().min(1).max(100), email: z.email(), password: z.string().min(8).max(128) });
 
 export const load: PageServerLoad = ({ locals }) => {
-	if (locals.userId && locals.profile) redirect(303, '/profil');
+	if (locals.userId && locals.profile) redirect(303, '/');
 };
 
 export const actions: Actions = {
@@ -19,10 +19,10 @@ export const actions: Actions = {
 		const { data, error } = await locals.supabase.auth.signUp({
 			email: parsed.data.email,
 			password: parsed.data.password,
-			options: { emailRedirectTo: `${url.origin}/auth/callback?next=/profil`, data: { display_name: parsed.data.displayName } }
+			options: { emailRedirectTo: `${url.origin}/auth/callback?next=/`, data: { display_name: parsed.data.displayName } }
 		});
 		if (error) return fail(400, { message: 'Die Registrierung ist fehlgeschlagen. Bitte versuche es erneut.', email: parsed.data.email, displayName: parsed.data.displayName });
-		if (data.session) redirect(303, '/profil');
+		if (data.session) redirect(303, '/');
 		return { checkEmail: true, email: parsed.data.email, displayName: parsed.data.displayName };
 	}
 };

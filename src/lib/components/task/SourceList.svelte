@@ -19,6 +19,9 @@
 	}
 </script>
 
+<details class="source-drawer">
+	<summary>Quellen anzeigen <span>{sources.length}</span></summary>
+	<div class="source-list">
 {#each sources as source (source.id)}
 	{@const content = record(source.content)}
 	{@const text = stringValue(content.text)}
@@ -48,3 +51,16 @@
 		{/if}
 	</article>
 {/each}
+	</div>
+</details>
+
+<style>
+	.source-drawer { padding: 0; border: 0; background: transparent; }
+	summary { display: none; min-height: 2.75rem; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+	summary span { display: grid; min-width: 1.5rem; height: 1.5rem; place-items: center; border-radius: 999px; background: var(--color-brand-soft); color: var(--color-brand-strong); font-size: .75rem; }
+	.source-list { display: grid; gap: var(--space-4); }
+	article { padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+	article h3 { margin-bottom: var(--space-4); }
+	@media(min-width: 48rem) { details:not([open]) > .source-list { display: grid; } }
+	@media(max-width: 47.99rem) { summary { display: flex; } details[open] summary { margin-bottom: var(--space-4); } }
+</style>
