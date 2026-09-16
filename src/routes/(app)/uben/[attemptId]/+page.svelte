@@ -131,6 +131,7 @@
 		{#if form?.message}<p role="alert">{form.message}</p>{/if}
 		{#if submitError}<p role="alert" class="save-error">{submitError}</p>{/if}
 		{#each data.attempt.results.filter((result) => result.status === 'needs_review') as result (result.answerId)}<form id={`self-grade-${result.answerId}`} method="POST" action="?/selfGrade"></form>{/each}
+		{#if data.attempt.results.some((result) => result.status === 'needs_review')}<form id="retry-auto-grade" method="POST" action="?/retryAutoGrade"></form>{/if}
 		<form method="POST" action="?/submit" onsubmit={data.attempt.status === 'in_progress' ? submitAttempt : undefined}>
 			{#each data.attempt.questions as question, index (question.id)}
 				<article>
@@ -144,7 +145,9 @@
 						{@const result = resultFor(question.id)!}
 						<p><strong>{result.status === 'pending' || result.status === 'processing' ? 'Bewertung ausstehend' : `${result.score} von ${result.maximum} Punkten · ${result.correctness === 'correct' ? 'Richtig' : result.correctness === 'partial' ? 'Teilweise richtig' : result.status === 'needs_review' ? 'Selbstbewertung nötig' : 'Nicht richtig'}`}</strong></p>
 						<p>{result.feedback}</p>
+						{#if result.solution}<p><strong>Musterlösung:</strong> {result.solution}</p>{/if}
 						{#if result.status === 'needs_review'}
+							<button form="retry-auto-grade">Automatische Bewertung erneut versuchen</button>
 							<div class="self-grade"><label>Eigene Punktzahl (0–{result.maximum}) <input form={`self-grade-${result.answerId}`} type="number" name="awardedPoints" min="0" max={result.maximum} step="0.5" required /></label><button form={`self-grade-${result.answerId}`} name="answerId" value={result.answerId}>Selbst bewerten</button></div>
 						{/if}
 					{/if}

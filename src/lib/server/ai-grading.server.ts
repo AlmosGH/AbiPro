@@ -76,6 +76,33 @@ export async function processAiGradesForAttempt(userId: string, attemptId: numbe
 	await finalizeAttemptIfReady(userId, attemptId);
 }
 
+/** Requeue provider failures so a learner is not forced to self-grade after a transient outage or model change. */
+export async function retryAiGradesForAttempt(userId: string, attemptId: number) {
+	const db = getDb();
+	const retryable = await db.select({ runId: gradingRuns.id, answerId: attemptAnswers.id })
+		.from(gradingRuns)
+		.innerJoin(attemptAnswers, eq(attemptAnswers.id, gradingRuns.attemptAnswerId))
+		.innerJoin(attemptTasks, eq(attemptTasks.id, attemptAnswers.attemptTaskId))
+		.innerJoin(assessmentAttempts, eq(assessmentAttempts.id, attemptTasks.attemptId))
+		.where(and(
+			eq(assessmentAttempts.id, attemptId),
+			eq(assessmentAttempts.userId, userId),
+			eq(gradingRuns.method, 'ai'),
+			eq(gradingRuns.status, 'needs_review'),
+			eq(attemptAnswers.status, 'needs_review')
+		));
+
+	if (!retryable.length) return { retried: 0 };
+	await db.transaction(async (transaction) => {
+		for (const { runId, answerId } of retryable) {
+			await transaction.update(gradingRuns).set({ status: 'pending', errorCode: null, errorMessage: null, completedAt: null }).where(eq(gradingRuns.id, runId));
+			await transaction.update(attemptAnswers).set({ status: 'pending', feedback: 'Die automatische Bewertung wird erneut versucht.' }).where(eq(attemptAnswers.id, answerId));
+		}
+	});
+	await processAiGradesForAttempt(userId, attemptId);
+	return { retried: retryable.length };
+}
+
 export async function finalizeAttemptIfReady(userId: string, attemptId: number) {
 	const db = getDb();
 	const [summary] = await db.select({

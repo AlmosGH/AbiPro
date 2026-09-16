@@ -6,7 +6,7 @@ import {
 	assessmentAttempts, assets, attemptAnswers, attemptTasks, curricula, examSessions, gradingRuns,
 	historicalPeriods, questions, sources, tasks, taskVersionTopics, taskVersions, topics
 } from '$lib/server/db/schema';
-import { learnerQuestionSelection, toLearnerQuestion } from '$lib/server/learner-content';
+import { learnerQuestionSelection, postGradingSolution, toLearnerQuestion } from '$lib/server/learner-content';
 import type { AnswerPayload } from '$lib/types/questions';
 import { isAiEligibleMiss, processAiGradesForAttempt, queueAiGrade } from '$lib/server/ai-grading.server';
 
@@ -119,21 +119,32 @@ export async function getPracticeAttempt(userId: string, attemptId: number) {
 	const topicRows = await db.select({ name: topics.name }).from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId))
 			.where(eq(taskVersionTopics.taskVersionId, attempt.taskVersionId)).orderBy(asc(topics.name));
 	const isSubmitted = attempt.status !== 'in_progress';
+	const gradingQuestions = isSubmitted
+		? await db.select({ id: questions.id, config: questions.config, gradingRule: questions.gradingRule })
+			.from(questions).where(eq(questions.taskVersionId, attempt.taskVersionId))
+		: [];
 	return {
 		...attempt,
 		topics: topicRows.map((row) => row.name),
 		sources: sourceRows,
 		questions: questionRows.map(toLearnerQuestion),
 		answers: answerRows.map((answer) => ({ questionId: answer.questionId, response: answer.response, lastSavedAt: answer.lastSavedAt })),
-		results: isSubmitted ? answerRows.map((answer) => ({
+		results: isSubmitted ? answerRows.map((answer) => {
+			const question = questionRows.find((question) => question.id === answer.questionId);
+			const gradingQuestion = gradingQuestions.find((question) => question.id === answer.questionId);
+			const maximum = Number(question?.maxPoints ?? 0);
+			const answerMayBeRevealed = answer.status === 'graded' || answer.status === 'needs_review';
+			return {
 			answerId: answer.id,
 			questionId: answer.questionId,
 			status: answer.status,
 			score: answer.awardedPoints ?? 0,
-			maximum: Number(questionRows.find((question) => question.id === answer.questionId)?.maxPoints ?? 0),
-			correctness: (answer.status === 'needs_review' ? 'invalid' : Number(answer.awardedPoints) >= Number(questionRows.find((question) => question.id === answer.questionId)?.maxPoints ?? 0) ? 'correct' : answer.awardedPoints && answer.awardedPoints > 0 ? 'partial' : 'incorrect') as DeterministicGrade['correctness'],
-			feedback: answer.feedback ?? ''
-		})) : []
+			maximum,
+			correctness: (answer.status === 'needs_review' ? 'invalid' : Number(answer.awardedPoints) >= maximum ? 'correct' : answer.awardedPoints && answer.awardedPoints > 0 ? 'partial' : 'incorrect') as DeterministicGrade['correctness'],
+			feedback: answer.feedback ?? '',
+			solution: answerMayBeRevealed && gradingQuestion ? postGradingSolution(gradingQuestion.config, gradingQuestion.gradingRule) : null
+		};
+		}) : []
 	};
 }
 

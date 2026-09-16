@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { learnerQuestionSelection, toLearnerQuestion } from './learner-content';
+import { learnerQuestionSelection, postGradingSolution, toLearnerQuestion } from './learner-content';
 
 describe('learner-facing task content', () => {
 	it('does not serialize official answers or grading criteria', () => {
@@ -27,5 +27,16 @@ describe('learner-facing task content', () => {
 			'id', 'position', 'kind', 'prompt', 'config', 'maxPoints'
 		]);
 		expect(learnerQuestionSelection).not.toHaveProperty('gradingRule');
+	});
+
+	it('formats solutions only from the server-side grading rule', () => {
+		expect(postGradingSolution(
+			{ kind: 'short_text', multiline: false },
+			{ kind: 'short_text', acceptedAnswers: ['Hafen', 'Bucht'], criteria: ['Hafen oder Bucht'], aiEligible: true, normalizeWhitespace: true }
+		)).toBe('Hafen / Bucht');
+		expect(postGradingSolution(
+			{ kind: 'choice', options: [{ id: 'a', label: 'Falsch' }, { id: 'b', label: 'Richtig' }] },
+			{ kind: 'choice', correctOptionId: 'b' }
+		)).toBe('Richtig');
 	});
 });

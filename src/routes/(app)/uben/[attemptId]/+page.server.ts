@@ -1,6 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import { z } from 'zod';
 import { getBestPracticeScore, getPracticeAttempt, submitPracticeAttempt } from '$lib/server/practice';
+import { retryAiGradesForAttempt } from '$lib/server/ai-grading.server';
 import { createAssetSignedUrl } from '$lib/server/storage';
 import { requireActor } from '$lib/server/authorization';
 import { selfGradeAnswer } from '$lib/server/ai-grading.server';
@@ -46,6 +47,17 @@ export const actions: Actions = {
 			return { selfGraded: true };
 		} catch (cause) {
 			return fail(400, { message: cause instanceof Error ? cause.message : 'Die Selbstbewertung konnte nicht gespeichert werden.' });
+		}
+	},
+	retryAutoGrade: async ({ locals, params }) => {
+		const actor = requireActor(locals);
+		const parsedId = attemptIdSchema.safeParse(params.attemptId);
+		if (!parsedId.success) return fail(404, { message: 'Übungsversuch nicht gefunden.' });
+		try {
+			const result = await retryAiGradesForAttempt(actor.userId, parsedId.data);
+			return { retried: result.retried };
+		} catch (cause) {
+			return fail(400, { message: cause instanceof Error ? cause.message : 'Die automatische Bewertung konnte nicht erneut gestartet werden.' });
 		}
 	}
 };
