@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gradeDeterministically, normalizeShortText, type DeterministicQuestion } from './deterministic';
+import { gradeDeterministically, normalizeShortText, validateAnswerDraft, type DeterministicQuestion } from './deterministic';
 
 const option = (id: string) => ({ id, label: id.toUpperCase() });
 const grade = (question: DeterministicQuestion, answer: unknown) => gradeDeterministically(question, answer);
@@ -30,6 +30,9 @@ describe('deterministic grading', () => {
 		};
 		expect(grade(question, { kind: 'multiple_choice', optionIds: [] }).correctness).toBe('invalid');
 		expect(grade(question, { kind: 'multiple_choice', optionIds: ['a', 'b', 'c'] }).correctness).toBe('invalid');
+		expect(validateAnswerDraft(question, { kind: 'multiple_choice', optionIds: [] })).toMatchObject({ success: true });
+		expect(validateAnswerDraft(question, { kind: 'multiple_choice', optionIds: ['a', 'b', 'c'] })).toMatchObject({ success: true });
+		expect(validateAnswerDraft(question, { kind: 'multiple_choice', optionIds: ['unknown'] })).toMatchObject({ success: false });
 	});
 
 	it('grades matching proportionally and rejects duplicate left endpoints', () => {

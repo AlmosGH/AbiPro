@@ -18,15 +18,18 @@ test.describe('learner critical paths', () => {
 
 	test('practice can start, autosave, and submit for grading', async ({ page }) => {
 		await page.goto('/uben');
-		await page.getByRole('button', { name: 'Übung starten' }).click();
+		await page.getByRole('button', { name: /Quick Practice starten|Ausgewählte Aufgabe starten/ }).click();
 		await expect(page).toHaveURL(/\/uben\/\d+$/);
 		const firstRadio = page.getByRole('radio').first();
 		if (await firstRadio.count()) await firstRadio.check();
 		const firstText = page.getByRole('textbox').first();
 		if (await firstText.count()) await firstText.fill('Fixture-Antwort');
-		await expect(page.getByText('Gespeichert').first()).toBeVisible();
-		await page.getByRole('button', { name: 'Antworten abgeben' }).click();
-		await expect(page.getByRole('heading', { name: 'Ergebnis' })).toBeVisible();
+		await expect(page.getByText('Alles gespeichert').first()).toBeVisible();
+		while (await page.getByRole('button', { name: 'Nächste Frage →' }).count()) {
+			await page.getByRole('button', { name: 'Nächste Frage →' }).click();
+		}
+		await page.getByRole('button', { name: 'Übung auswerten' }).click();
+		await expect(page.getByText('Dein Ergebnis')).toBeVisible();
 	});
 
 	test('an expired server fixture is finalized', async ({ page }) => {

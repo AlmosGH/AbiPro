@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, sql } from 'drizzle-orm';
-import { DETERMINISTIC_GRADER_SCHEMA_VERSION, gradeDeterministically, type DeterministicGrade } from '$lib/grading/deterministic';
+import { DETERMINISTIC_GRADER_SCHEMA_VERSION, gradeDeterministically, validateAnswerDraft, type DeterministicGrade } from '$lib/grading/deterministic';
 import { MOCK_EXAM_CONFIG } from '$lib/exam/config';
 import { inspectExamPool, selectExamTasks, type ExamCandidate } from '$lib/exam/selection';
 import { deterministicInputHash, defaultUnanswered } from '$lib/server/practice';
@@ -218,18 +218,18 @@ export async function saveMockExamAnswer(userId: string, attemptId: number, ques
 			.innerJoin(questions, and(eq(questions.id, questionId), eq(questions.taskVersionId, attemptTasks.taskVersionId)))
 			.where(eq(attemptTasks.attemptId, attemptId));
 		if (!row) throw new Error('Frage gehört nicht zu diesem Prüfungsversuch.');
-		const validation = gradeDeterministically(row, response);
-		if (validation.correctness === 'invalid') throw new Error(validation.feedback);
+		const validation = validateAnswerDraft(row, response);
+		if (!validation.success) throw new Error(validation.message);
 		await transaction.insert(attemptAnswers).values({
 			attemptTaskId: row.attemptTaskId,
 			questionId,
 			taskVersionId: row.taskVersionId,
-			response: response as AnswerPayload,
+			response: validation.data,
 			status: 'pending',
 			lastSavedAt: serverNow
 		}).onConflictDoUpdate({
 			target: [attemptAnswers.attemptTaskId, attemptAnswers.questionId],
-			set: { response: response as AnswerPayload, status: 'pending', awardedPoints: null, feedback: null, lastSavedAt: serverNow }
+			set: { response: validation.data, status: 'pending', awardedPoints: null, feedback: null, lastSavedAt: serverNow }
 		});
 		return { savedAt: serverNow };
 	});

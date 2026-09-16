@@ -41,6 +41,7 @@
 	let saveStates = $state<Record<number, SaveState>>({});
 	let errors = $state<Record<number, string>>({});
 	let finalizing = $state(false);
+	let reviewing = $state(false);
 	let finalizationError = $state('');
 	let remainingMilliseconds = $state(initialRemaining());
 	let clientExpired = $state(initiallyExpired());
@@ -149,7 +150,7 @@
 
 	async function finishAttempt(timedOut = false) {
 		if (finalizing || data.attempt.status !== 'in_progress') return;
-		if (!timedOut && unansweredCount > 0 && !confirm(`Du hast noch ${unansweredCount} unbeantwortete ${unansweredCount === 1 ? 'Frage' : 'Fragen'}. Trotzdem abgeben?`)) return;
+		if (!timedOut && !reviewing) { reviewing = true; return; }
 		finalizing = true;
 		finalizationError = '';
 		if (timedOut) await Promise.all([...savingPromises.values()]);
@@ -194,6 +195,11 @@
 	function resultFor(questionId: number) {
 		return currentTask.results.find((result) => result.questionId === questionId);
 	}
+
+	function goToQuestion(taskIndex: number) {
+		currentTaskIndex = taskIndex;
+		reviewing = false;
+	}
 </script>
 
 <svelte:head><title>Prüfung – AbiPro</title></svelte:head>
@@ -211,6 +217,8 @@
 	</div>
 
 	{#if clientExpired && data.attempt.status === 'in_progress'}<p role="status" class="readiness-message">Die Bearbeitungszeit ist abgelaufen. Deine Prüfung wird abgeschlossen …</p>{/if}
+	{#if data.attempt.status === 'in_progress' && remainingMilliseconds <= 5 * 60 * 1000 && remainingMilliseconds > 60 * 1000}<div class="time-warning" role="status"><strong>Noch 5 Minuten</strong><span>Prüfe offene Aufgaben und plane Zeit für die Abgabe ein.</span></div>{/if}
+	{#if data.attempt.status === 'in_progress' && remainingMilliseconds <= 60 * 1000 && remainingMilliseconds > 0}<div class="time-warning critical" role="alert"><strong>Letzte Minute</strong><span>Deine Prüfung wird bei Ablauf automatisch abgegeben.</span></div>{/if}
 	{#if form?.message}<p role="alert" class="save-error">{form.message}</p>{/if}
 	{#if finalizationError}<p role="alert" class="save-error">{finalizationError}</p>{/if}
 
@@ -221,6 +229,10 @@
 			</button>
 		{/each}
 	</nav>
+
+	{#if reviewing && data.attempt.status === 'in_progress'}
+		<section class="review-screen"><span>Vor der Abgabe</span><h2>Antworten überprüfen</h2><p>{unansweredCount ? `Noch ${unansweredCount} ${unansweredCount === 1 ? 'Frage ist' : 'Fragen sind'} unbeantwortet.` : 'Alle Fragen sind beantwortet.'}</p><div class="review-list">{#each data.attempt.tasks as task, taskIndex (task.attemptTaskId)}<button type="button" onclick={() => goToQuestion(taskIndex)}><span>Aufgabe {taskIndex + 1}</span><strong>{task.questions.filter((question) => answeredQuestionIds.has(question.id)).length} / {task.questions.length} beantwortet</strong></button>{/each}</div><div class="review-actions"><button type="button" class="secondary-action" onclick={() => reviewing = false}>Weiter bearbeiten</button><button type="button" disabled={finalizing} onclick={() => void finishAttempt(false)}>{finalizing ? 'Wird abgeschlossen …' : unansweredCount ? 'Trotzdem abgeben' : 'Prüfung abgeben'}</button></div></section>
+	{:else}
 
 	<section class="exam-task">
 		<p>Aufgabe {currentTaskIndex + 1} von {data.attempt.tasks.length}</p>
@@ -259,6 +271,7 @@
 			{/if}
 		</form>
 	</section>
+	{/if}
 
 	<div class="exam-pager">
 		<button type="button" disabled={currentTaskIndex === 0} onclick={() => currentTaskIndex--}>Vorherige Aufgabe</button>
@@ -269,3 +282,16 @@
 		<p class="review-note">Wähle oben jede Aufgabe aus, um deine Antwort, die erreichten Punkte und das Bewertungsfeedback im Detail zu prüfen.</p>
 	{/if}
 </main>
+
+<style>
+	.exam-page { max-width: 88rem !important; }
+	.exam-header { position: sticky; z-index: 10; top: var(--topbar-height); display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); margin: calc(var(--space-8) * -1) calc(var(--space-6) * -1) var(--space-5); padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--color-border); background: rgb(246 248 245 / .96); backdrop-filter: blur(12px); }
+	.exam-header p { margin: 0; }.exam-header h1 { margin: .25rem 0 0; font-size: 1.7rem; }.exam-timer,.exam-score { display: grid; min-width: 10rem; padding: .6rem 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: white; text-align: right; }.exam-timer span,.exam-score span { color: var(--color-muted); font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }.exam-timer strong,.exam-score strong { font-variant-numeric: tabular-nums; font-size: 1.35rem; }.exam-timer.timer-critical { border-color: var(--color-danger); }
+	.time-warning { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4); border-left: 4px solid var(--color-warning); border-radius: var(--radius-md); background: var(--color-warning-soft); color: var(--color-warning); }.time-warning strong::before { content: '⏱ '; }.time-warning.critical { border-color: var(--color-danger); background: var(--color-danger-soft); color: var(--color-danger); }
+	.task-navigation { display: flex; gap: var(--space-2); overflow-x: auto; padding: var(--space-2) 0 var(--space-4); }.task-navigation button { min-width: 4.5rem; min-height: 3.5rem; flex: 1; flex-direction: column; gap: .1rem; border-color: var(--color-border-strong); background: white; color: var(--color-ink); }.task-navigation button.complete { border-color: var(--color-brand); background: var(--color-brand-soft); }.task-navigation button.current { outline: 2px solid var(--color-brand); outline-offset: 2px; }.task-navigation small { color: var(--color-muted); font-size: .65rem; }
+	.exam-task,.review-screen { padding: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-surface); box-shadow: var(--shadow-sm); }.exam-task > p:first-child,.review-screen > span { color: var(--color-brand-strong); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }.exam-task form { display: block; }.exam-task form article { margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--color-border); }
+	.exam-actions { position: sticky; bottom: var(--space-3); display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-top: var(--space-6); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: rgb(255 255 255 / .96); box-shadow: var(--shadow-md); }.exam-actions p { margin: 0; }
+	.review-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin: var(--space-5) 0; }.review-list button { display: grid; justify-items: start; border-color: var(--color-border-strong); background: var(--color-surface-soft); color: var(--color-ink); }.review-list strong { font-size: .75rem; }.review-actions { display: flex; justify-content: flex-end; gap: var(--space-3); }.secondary-action { border-color: var(--color-border-strong); background: white; color: var(--color-ink); }
+	.exam-pager { display: flex; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-4); }.exam-pager button { border-color: var(--color-border-strong); background: white; color: var(--color-ink); }.review-note { margin-top: var(--space-5); padding: var(--space-4); border-radius: var(--radius-md); background: var(--color-info-soft); color: var(--color-info); }
+	@media(max-width: 48rem) { .exam-header { top: 3.75rem; margin: calc(var(--space-5) * -1) -.65rem var(--space-4); padding: var(--space-3) .65rem; }.exam-header h1 { font-size: 1.25rem; }.exam-header > div p { display: none; }.exam-timer,.exam-score { min-width: 8rem; padding: .45rem .7rem; }.time-warning { align-items: flex-start; flex-direction: column; gap: .1rem; }.task-navigation { margin-inline: -.65rem; padding-inline: .65rem; }.task-navigation button { min-width: 4rem; }.exam-task,.review-screen { padding: var(--space-4); }.review-list { grid-template-columns: repeat(2, 1fr); }.review-actions,.exam-actions { align-items: stretch; flex-direction: column; }.review-actions button,.exam-actions button { width: 100%; }.exam-pager { overflow: hidden; }.exam-pager button { flex: 1; font-size: .78rem; } }
+</style>

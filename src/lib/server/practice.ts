@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
-import { gradeDeterministically, DETERMINISTIC_GRADER_SCHEMA_VERSION, type DeterministicGrade } from '$lib/grading/deterministic';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { gradeDeterministically, validateAnswerDraft, DETERMINISTIC_GRADER_SCHEMA_VERSION, type DeterministicGrade } from '$lib/grading/deterministic';
 import { getDb } from '$lib/server/db';
 import {
 	assessmentAttempts, assets, attemptAnswers, attemptTasks, curricula, examSessions, gradingRuns,
@@ -45,11 +45,17 @@ export async function listResumablePracticeAttempts(userId: string) {
 		id: assessmentAttempts.id,
 		title: taskVersions.title,
 		startedAt: assessmentAttempts.startedAt,
-		maxScore: assessmentAttempts.maxScore
+		maxScore: assessmentAttempts.maxScore,
+		answeredCount: sql<number>`count(distinct ${attemptAnswers.questionId})::int`,
+		questionCount: sql<number>`count(distinct ${questions.id})::int`,
+		lastActivityAt: sql<Date>`coalesce(max(${attemptAnswers.lastSavedAt}), ${assessmentAttempts.startedAt})`
 	}).from(assessmentAttempts)
 		.innerJoin(attemptTasks, eq(attemptTasks.attemptId, assessmentAttempts.id))
 		.innerJoin(taskVersions, eq(taskVersions.id, attemptTasks.taskVersionId))
+		.innerJoin(questions, eq(questions.taskVersionId, taskVersions.id))
+		.leftJoin(attemptAnswers, eq(attemptAnswers.attemptTaskId, attemptTasks.id))
 		.where(and(eq(assessmentAttempts.userId, userId), eq(assessmentAttempts.kind, 'practice'), eq(assessmentAttempts.status, 'in_progress')))
+		.groupBy(assessmentAttempts.id, taskVersions.title)
 		.orderBy(desc(assessmentAttempts.startedAt));
 }
 
@@ -160,15 +166,15 @@ export async function savePracticeAnswer(userId: string, attemptId: number, ques
 			.for('update');
 		if (!row) throw new Error('Frage gehört nicht zu diesem Übungsversuch.');
 		if (row.status !== 'in_progress') throw new Error('Ein abgegebener Versuch kann nicht mehr geändert werden.');
-		const validation = gradeDeterministically(row, response);
-		if (validation.correctness === 'invalid') throw new Error(validation.feedback);
+		const validation = validateAnswerDraft(row, response);
+		if (!validation.success) throw new Error(validation.message);
 		const now = new Date();
 		await transaction.insert(attemptAnswers).values({
 			attemptTaskId: row.attemptTaskId, questionId, taskVersionId: row.taskVersionId,
-			response: response as AnswerPayload, status: 'pending', lastSavedAt: now
+			response: validation.data, status: 'pending', lastSavedAt: now
 		}).onConflictDoUpdate({
 			target: [attemptAnswers.attemptTaskId, attemptAnswers.questionId],
-			set: { response: response as AnswerPayload, status: 'pending', awardedPoints: null, feedback: null, lastSavedAt: now }
+			set: { response: validation.data, status: 'pending', awardedPoints: null, feedback: null, lastSavedAt: now }
 		});
 		return { savedAt: now };
 	});

@@ -19,7 +19,7 @@
 	}
 </script>
 
-<details class="source-drawer">
+<details class="source-drawer" open>
 	<summary>Quellen anzeigen <span>{sources.length}</span></summary>
 	<div class="source-list">
 {#each sources as source (source.id)}
@@ -32,9 +32,9 @@
 	<article>
 		<h3>{source.title ?? `Quelle ${source.position + 1}`}</h3>
 		{#if source.assetUrl}
-			<img src={source.assetUrl} alt={source.assetAltText || source.title || 'Originalseite der Aufgabe'} loading="lazy" />
+			<a class="source-image" href={source.assetUrl} target="_blank" rel="noreferrer" title="Quelle in voller Größe öffnen"><img src={source.assetUrl} alt={source.assetAltText || source.title || 'Originalseite der Aufgabe'} loading="lazy" /></a>
 		{:else if stringValue(content.url)}
-			<img src={stringValue(content.url)} alt={stringValue(content.alt) || source.title || 'Quelle der Aufgabe'} loading="lazy" />
+			<a class="source-image" href={stringValue(content.url)} target="_blank" rel="noreferrer" title="Quelle in voller Größe öffnen"><img src={stringValue(content.url)} alt={stringValue(content.alt) || source.title || 'Quelle der Aufgabe'} loading="lazy" /></a>
 		{:else if hasStructuredText}
 			<p>{text}</p>
 		{:else if hasStructuredTable}
@@ -61,6 +61,8 @@
 	.source-list { display: grid; gap: var(--space-4); }
 	article { padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 	article h3 { margin-bottom: var(--space-4); }
-	@media(min-width: 48rem) { details:not([open]) > .source-list { display: grid; } }
+	.source-image { display: block; overflow: auto; border-radius: var(--radius-md); cursor: zoom-in; }
+	.source-image img { display: block; width: 100%; }
+	@media(min-width: 48rem) { summary { display: none; } }
 	@media(max-width: 47.99rem) { summary { display: flex; } details[open] summary { margin-bottom: var(--space-4); } }
 </style>

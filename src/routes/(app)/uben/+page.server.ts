@@ -5,6 +5,7 @@ import { createPracticeAttempt, listResumablePracticeAttempts } from '$lib/serve
 import { requireActor } from '$lib/server/authorization';
 import type { Actions, PageServerLoad } from './$types';
 import { enforceRateLimit } from '$lib/server/rate-limit';
+import { getProfileProgress } from '$lib/server/profile-progress';
 
 const optionalId = z.preprocess((value) => value === '' || value === null ? undefined : value, z.coerce.number().int().positive().optional());
 
@@ -12,9 +13,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const actor = requireActor(locals, `/login?next=${encodeURIComponent(url.pathname + url.search)}`);
 	const references = await getReferenceData();
 	const resumableAttempts = await listResumablePracticeAttempts(actor.userId);
+	const progress = await getProfileProgress(actor.userId);
+	const recommendedTopic = [...progress.topics]
+		.filter((topic) => topic.attempts > 0 && topic.averagePercent !== null)
+		.sort((a, b) => (a.averagePercent ?? 101) - (b.averagePercent ?? 101))[0] ?? null;
 	return {
 		...references,
 		resumableAttempts,
+		recommendedTopic,
 		requestedTaskSlug: url.searchParams.get('task')?.trim() || null,
 		requestedTopicId: optionalId.safeParse(url.searchParams.get('topicId')).data ?? null
 	};

@@ -18,6 +18,10 @@ export interface DeterministicQuestion {
 	maxPoints: number;
 }
 
+export type DraftAnswerValidation =
+	| { success: true; data: AnswerPayload }
+	| { success: false; message: string };
+
 function roundPoints(value: number) {
 	return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -48,6 +52,51 @@ function invalid(maximum: number, feedback: string): DeterministicGrade {
 
 function hasDuplicates(values: string[]) {
 	return new Set(values).size !== values.length;
+}
+
+/** Validate an in-progress answer without enforcing grading completeness. */
+export function validateAnswerDraft(question: Pick<DeterministicQuestion, 'kind' | 'config'>, answer: unknown): DraftAnswerValidation {
+	if (question.kind !== question.config.kind) return { success: false, message: 'Die serverseitige Fragenkonfiguration ist ungültig.' };
+	const parsed = answerPayloadSchema.safeParse(answer);
+	if (!parsed.success || parsed.data.kind !== question.kind) return { success: false, message: 'Die Antwort hat ein ungültiges Format.' };
+	const payload = parsed.data;
+	switch (question.config.kind) {
+		case 'choice': {
+			if (payload.kind !== 'choice') break;
+			const allowed = new Set(question.config.options.map((option) => option.id));
+			if (allowed.size !== question.config.options.length) return { success: false, message: 'Die serverseitige Fragenkonfiguration ist ungültig.' };
+			if (!allowed.has(payload.optionId)) return { success: false, message: 'Die Antwort verweist auf eine unbekannte Option.' };
+			return { success: true, data: payload };
+		}
+		case 'multiple_choice': {
+			if (payload.kind !== 'multiple_choice') break;
+			const allowed = new Set(question.config.options.map((option) => option.id));
+			if (allowed.size !== question.config.options.length) return { success: false, message: 'Die serverseitige Fragenkonfiguration ist ungültig.' };
+			if (hasDuplicates(payload.optionIds) || payload.optionIds.some((id) => !allowed.has(id))) return { success: false, message: 'Die Antwort enthält doppelte oder unbekannte Optionen.' };
+			return { success: true, data: payload };
+		}
+		case 'matching': {
+			if (payload.kind !== 'matching') break;
+			const leftIds = new Set(question.config.left.map((item) => item.id));
+			const rightIds = new Set(question.config.right.map((item) => item.id));
+			const answerLeft = payload.pairs.map((pair) => pair.leftId);
+			if (hasDuplicates(answerLeft) || payload.pairs.some((pair) => !leftIds.has(pair.leftId) || !rightIds.has(pair.rightId))) return { success: false, message: 'Die Zuordnung enthält doppelte linke oder unbekannte Einträge.' };
+			return { success: true, data: payload };
+		}
+		case 'ordering': {
+			if (payload.kind !== 'ordering') break;
+			const configured = question.config.items.map((item) => item.id);
+			const allowed = new Set(configured);
+			if (payload.itemIds.length !== configured.length || hasDuplicates(payload.itemIds) || payload.itemIds.some((id) => !allowed.has(id))) return { success: false, message: 'Die Reihenfolge muss jedes Element genau einmal enthalten.' };
+			return { success: true, data: payload };
+		}
+		case 'short_text': {
+			if (payload.kind !== 'short_text') break;
+			if (question.config.maximumLength !== undefined && payload.text.length > question.config.maximumLength) return { success: false, message: 'Die Antwort überschreitet die erlaubte Länge.' };
+			return { success: true, data: payload };
+		}
+	}
+	return { success: false, message: 'Die Antwort passt nicht zum Fragetyp.' };
 }
 
 export function normalizeShortText(value: string, normalizeWhitespace = false) {

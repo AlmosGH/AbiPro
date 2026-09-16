@@ -62,6 +62,7 @@ p { line-height: 1.65; }
 
 :focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-sm); }
 ::selection { background: var(--color-brand-soft); color: var(--color-brand-strong); }
+.sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
 
 .skip-link { position: fixed; z-index: 1000; top: var(--space-3); left: var(--space-3); transform: translateY(-150%); padding: 0.75rem 1rem; border-radius: var(--radius-md); background: var(--color-ink); color: white; }
 .skip-link:focus { transform: translateY(0); }
