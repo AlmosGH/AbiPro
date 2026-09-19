@@ -2,6 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { savePracticeAnswer } from '$lib/server/practice';
 import type { RequestHandler } from './$types';
+import { timeQuery } from '$lib/server/query-timing';
 
 const idSchema = z.coerce.number().int().positive();
 
@@ -17,7 +18,7 @@ export const PUT: RequestHandler = async ({ locals, params, request }) => {
 		error(400, 'Ungültiges JSON.');
 	}
 	try {
-		const saved = await savePracticeAnswer(locals.userId, attemptId.data, questionId.data, response);
+		const saved = await timeQuery('practice_autosave', () => savePracticeAnswer(locals.userId!, attemptId.data, questionId.data, response), { attemptId: attemptId.data, questionId: questionId.data });
 		return json(saved);
 	} catch (cause) {
 		error(400, cause instanceof Error ? cause.message : 'Antwort konnte nicht gespeichert werden.');

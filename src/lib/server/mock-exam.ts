@@ -273,30 +273,40 @@ export async function getMockExamAttempt(userId: string, attemptId: number) {
 		.where(eq(attemptTasks.attemptId, attemptId)).orderBy(asc(attemptTasks.position));
 	const versionIds = taskRows.map((row) => row.taskVersionId);
 	const attemptTaskIds = taskRows.map((row) => row.attemptTaskId);
-	const sourceRows = await db.select({ id: sources.id, taskVersionId: sources.taskVersionId, position: sources.position, kind: sources.kind, title: sources.title, content: sources.content, assetPath: assets.path, assetAltText: assets.altText })
-			.from(sources).leftJoin(assets, eq(assets.id, sources.assetId)).where(inArray(sources.taskVersionId, versionIds)).orderBy(asc(sources.position));
-	const questionRows = await db.select({ ...learnerQuestionSelection, taskVersionId: questions.taskVersionId }).from(questions).where(inArray(questions.taskVersionId, versionIds)).orderBy(asc(questions.position));
-	const answerRows = await db.select({ id: attemptAnswers.id, questionId: attemptAnswers.questionId, attemptTaskId: attemptAnswers.attemptTaskId, response: attemptAnswers.response, lastSavedAt: attemptAnswers.lastSavedAt, status: attemptAnswers.status, awardedPoints: attemptAnswers.awardedPoints, feedback: attemptAnswers.feedback })
-			.from(attemptAnswers)
-			.where(inArray(attemptAnswers.attemptTaskId, attemptTaskIds));
-	const topicRows = await db.select({ taskVersionId: taskVersionTopics.taskVersionId, name: topics.name }).from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId))
-			.where(inArray(taskVersionTopics.taskVersionId, versionIds)).orderBy(asc(topics.name));
+	const [sourceRows, questionRows, answerRows, topicRows] = await Promise.all([
+		db.select({ id: sources.id, taskVersionId: sources.taskVersionId, position: sources.position, kind: sources.kind, title: sources.title, content: sources.content, assetPath: assets.path, assetAltText: assets.altText })
+			.from(sources).leftJoin(assets, eq(assets.id, sources.assetId)).where(inArray(sources.taskVersionId, versionIds)).orderBy(asc(sources.position)),
+		db.select({ ...learnerQuestionSelection, taskVersionId: questions.taskVersionId }).from(questions).where(inArray(questions.taskVersionId, versionIds)).orderBy(asc(questions.position)),
+		db.select({ id: attemptAnswers.id, questionId: attemptAnswers.questionId, attemptTaskId: attemptAnswers.attemptTaskId, response: attemptAnswers.response, lastSavedAt: attemptAnswers.lastSavedAt, status: attemptAnswers.status, awardedPoints: attemptAnswers.awardedPoints, feedback: attemptAnswers.feedback })
+			.from(attemptAnswers).where(inArray(attemptAnswers.attemptTaskId, attemptTaskIds)),
+		db.select({ taskVersionId: taskVersionTopics.taskVersionId, name: topics.name }).from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId))
+			.where(inArray(taskVersionTopics.taskVersionId, versionIds)).orderBy(asc(topics.name))
+	]);
+	const topicsByVersion = new Map<number, string[]>();
+	const sourcesByVersion = new Map<number, typeof sourceRows>();
+	const questionsByVersion = new Map<number, typeof questionRows>();
+	const answersByTask = new Map<number, typeof answerRows>();
+	const questionsById = new Map(questionRows.map((question) => [question.id, question]));
+	for (const row of topicRows) topicsByVersion.set(row.taskVersionId, [...(topicsByVersion.get(row.taskVersionId) ?? []), row.name]);
+	for (const row of sourceRows) sourcesByVersion.set(row.taskVersionId, [...(sourcesByVersion.get(row.taskVersionId) ?? []), row]);
+	for (const row of questionRows) questionsByVersion.set(row.taskVersionId, [...(questionsByVersion.get(row.taskVersionId) ?? []), row]);
+	for (const row of answerRows) answersByTask.set(row.attemptTaskId, [...(answersByTask.get(row.attemptTaskId) ?? []), row]);
 	const submitted = attempt.status !== 'in_progress';
 	return {
 		...attempt,
 		tasks: taskRows.map((task) => ({
 			...task,
-			topics: topicRows.filter((row) => row.taskVersionId === task.taskVersionId).map((row) => row.name),
-			sources: sourceRows.filter((row) => row.taskVersionId === task.taskVersionId),
-			questions: questionRows.filter((row) => row.taskVersionId === task.taskVersionId).map(toLearnerQuestion),
-			answers: answerRows.filter((row) => row.attemptTaskId === task.attemptTaskId).map(({ questionId, response, lastSavedAt }) => ({ questionId, response, lastSavedAt })),
-			results: submitted ? answerRows.filter((row) => row.attemptTaskId === task.attemptTaskId).map((answer) => ({
+			topics: topicsByVersion.get(task.taskVersionId) ?? [],
+			sources: sourcesByVersion.get(task.taskVersionId) ?? [],
+			questions: (questionsByVersion.get(task.taskVersionId) ?? []).map(toLearnerQuestion),
+			answers: (answersByTask.get(task.attemptTaskId) ?? []).map(({ questionId, response, lastSavedAt }) => ({ questionId, response, lastSavedAt })),
+			results: submitted ? (answersByTask.get(task.attemptTaskId) ?? []).map((answer) => ({
 				answerId: answer.id,
 				questionId: answer.questionId,
 				status: answer.status,
 				score: answer.awardedPoints ?? 0,
-				maximum: Number(questionRows.find((question) => question.id === answer.questionId)?.maxPoints ?? 0),
-				correctness: (answer.status === 'needs_review' ? 'invalid' : Number(answer.awardedPoints) >= Number(questionRows.find((question) => question.id === answer.questionId)?.maxPoints ?? 0) ? 'correct' : answer.awardedPoints && answer.awardedPoints > 0 ? 'partial' : 'incorrect') as DeterministicGrade['correctness'],
+				maximum: Number(questionsById.get(answer.questionId)?.maxPoints ?? 0),
+				correctness: (answer.status === 'needs_review' ? 'invalid' : Number(answer.awardedPoints) >= Number(questionsById.get(answer.questionId)?.maxPoints ?? 0) ? 'correct' : answer.awardedPoints && answer.awardedPoints > 0 ? 'partial' : 'incorrect') as DeterministicGrade['correctness'],
 				feedback: answer.feedback ?? ''
 			})) : []
 		}))

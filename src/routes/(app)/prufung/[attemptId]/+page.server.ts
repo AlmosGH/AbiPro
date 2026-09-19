@@ -6,23 +6,21 @@ import { requireActor } from '$lib/server/authorization';
 import { selfGradeAnswer } from '$lib/server/ai-grading.server';
 import type { Actions, PageServerLoad } from './$types';
 import { enforceRateLimit } from '$lib/server/rate-limit';
+import { timeQuery } from '$lib/server/query-timing';
 
 const attemptIdSchema = z.coerce.number().int().positive();
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, depends }) => {
 	const actor = requireActor(locals);
 	const parsedId = attemptIdSchema.safeParse(params.attemptId);
 	if (!parsedId.success) error(404, 'Prüfungsversuch nicht gefunden.');
-	const attempt = await getMockExamAttempt(actor.userId, parsedId.data);
+	depends(`attempt:exam:${parsedId.data}`);
+	const attempt = await timeQuery('exam_attempt_loading', () => getMockExamAttempt(actor.userId, parsedId.data), { attemptId: parsedId.data });
 	if (!attempt) error(404, 'Prüfungsversuch nicht gefunden.');
-	const examTasks = [];
-	for (const task of attempt.tasks) {
-		const sources = [];
-		for (const { assetPath, ...source } of task.sources) {
-			sources.push({ ...source, assetUrl: assetPath ? await createAssetSignedUrl(assetPath) : null });
-		}
-		examTasks.push({ ...task, sources });
-	}
+	const examTasks = await Promise.all(attempt.tasks.map(async (task) => ({
+		...task,
+		sources: await Promise.all(task.sources.map(async ({ assetPath, ...source }) => ({ ...source, assetUrl: assetPath ? await createAssetSignedUrl(assetPath) : null })))
+	})));
 	return { attempt: { ...attempt, tasks: examTasks } };
 };
 

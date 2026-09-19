@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
+	import StatusCenter from '$lib/components/ui/StatusCenter.svelte';
 
 	let { children } = $props();
 </script>
@@ -8,6 +9,7 @@
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 <a class="skip-link" href="#main-content">Zum Inhalt springen</a>
 <div id="main-content">{@render children()}</div>
+<StatusCenter />
 <footer class="site-footer">
 	<div class="footer-inner">
 		<div>

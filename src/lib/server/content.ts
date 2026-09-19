@@ -19,13 +19,30 @@ function assertAdmin(actor: Actor) {
 	if (actor.profile.role !== 'admin') throw new Error('Administrator access is required.');
 }
 
-export async function getReferenceData() {
+let referenceDataCache: { expiresAt: number; value: Awaited<ReturnType<typeof loadReferenceData>> } | null = null;
+let referenceDataPending: Promise<Awaited<ReturnType<typeof loadReferenceData>>> | null = null;
+
+async function loadReferenceData() {
 	const db = getDb();
-	const curriculumRows = await db.select().from(curricula).orderBy(asc(curricula.name));
-	const periodRows = await db.select().from(historicalPeriods).orderBy(asc(historicalPeriods.position), asc(historicalPeriods.name));
-	const topicRows = await db.select().from(topics).orderBy(asc(topics.name));
-	const sessionRows = await db.select().from(examSessions).orderBy(desc(examSessions.year), asc(examSessions.session));
+	const [curriculumRows, periodRows, topicRows, sessionRows] = await Promise.all([
+		db.select().from(curricula).orderBy(asc(curricula.name)),
+		db.select().from(historicalPeriods).orderBy(asc(historicalPeriods.position), asc(historicalPeriods.name)),
+		db.select().from(topics).orderBy(asc(topics.name)),
+		db.select().from(examSessions).orderBy(desc(examSessions.year), asc(examSessions.session))
+	]);
 	return { curricula: curriculumRows, periods: periodRows, topics: topicRows, sessions: sessionRows };
+}
+
+export async function getReferenceData() {
+	if (referenceDataCache && referenceDataCache.expiresAt > Date.now()) return referenceDataCache.value;
+	referenceDataPending ??= loadReferenceData();
+	try {
+		const value = await referenceDataPending;
+		referenceDataCache = { expiresAt: Date.now() + 5 * 60_000, value };
+		return value;
+	} finally {
+		referenceDataPending = null;
+	}
 }
 
 export async function createTask(actor: Actor, metadata: TaskMetadata) {
@@ -297,7 +314,9 @@ export async function listPublishedTasks(filters: { query?: string; curriculumId
 	const topicRows = ids.length ? await db.select({ versionId: taskVersionTopics.taskVersionId, name: topics.name })
 		.from(taskVersionTopics).innerJoin(topics, eq(topics.id, taskVersionTopics.topicId))
 		.where(inArray(taskVersionTopics.taskVersionId, ids)).orderBy(asc(topics.name)) : [];
-	return rows.map(({ versionId, ...row }) => ({ ...row, taskVersionId: versionId, topics: topicRows.filter((topic) => topic.versionId === versionId).map((topic) => topic.name) }));
+	const topicsByVersion = new Map<number, string[]>();
+	for (const topic of topicRows) topicsByVersion.set(topic.versionId, [...(topicsByVersion.get(topic.versionId) ?? []), topic.name]);
+	return rows.map(({ versionId, ...row }) => ({ ...row, taskVersionId: versionId, topics: topicsByVersion.get(versionId) ?? [] }));
 }
 
 export async function getPublishedTask(slug: string) {

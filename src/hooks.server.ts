@@ -5,6 +5,7 @@ import { findProfile } from '$lib/server/profiles';
 import { logServerError } from '$lib/server/logger.server';
 
 export const handle: Handle = async ({ event, resolve }) => {
+	const started = performance.now();
 	const supabaseUrl = publicEnv.PUBLIC_SUPABASE_URL;
 	const publishableKey = publicEnv.PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 	if (!supabaseUrl || !publishableKey) {
@@ -26,11 +27,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const userId = !error && typeof data?.claims?.sub === 'string' ? data.claims.sub : null;
 	event.locals.claims = !error ? data?.claims ?? null : null;
 	event.locals.userId = userId;
-	event.locals.profile = userId ? await findProfile(userId) : null;
+	const isPublicRoute = ['/login', '/register', '/auth/', '/datenschutz', '/impressum', '/ki-bewertung'].some((path) => event.url.pathname === path || event.url.pathname.startsWith(path));
+	event.locals.profile = userId && !isPublicRoute ? await findProfile(userId) : null;
 
-	return resolve(event, {
+	const response = await resolve(event, {
 		filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
 	});
+	console.info(JSON.stringify({ level: 'info', type: 'hook_timing', operation: 'authentication', route: event.route.id ?? event.url.pathname, durationMs: Math.round((performance.now() - started) * 10) / 10, profileRead: Boolean(userId && !isPublicRoute) }));
+	return response;
 };
 
 export const handleError: HandleServerError = ({ error, event, status }) => {

@@ -18,7 +18,7 @@
 <div class="app-shell">
 	<aside class="sidebar">
 		<a class="brand" href="/" aria-label="AbiPro Übersicht"><span aria-hidden="true">A</span><strong>AbiPro</strong></a>
-		<nav aria-label="Hauptnavigation">
+		<nav aria-label="Hauptnavigation" data-sveltekit-preload-data="false" data-sveltekit-preload-code="viewport">
 			<a href="/" aria-current={path === '/' ? 'page' : undefined}><Icon name="home" /><span>Übersicht</span></a>
 			{#each learnerItems as item (item.href)}
 				<a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span></a>
@@ -44,7 +44,7 @@
 		<div class="content">{@render children()}</div>
 	</div>
 
-	<nav class="bottom-nav" aria-label="Mobile Hauptnavigation">
+	<nav class="bottom-nav" aria-label="Mobile Hauptnavigation" data-sveltekit-preload-data="false" data-sveltekit-preload-code="viewport">
 		{#each learnerItems as item (item.href)}
 			<a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span></a>
 		{/each}

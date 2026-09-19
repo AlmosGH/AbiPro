@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { applyAction, deserialize } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
-	import type { ActionResult } from '@sveltejs/kit';
+	import { applyAction, deserialize, enhance } from '$app/forms';
+	import { invalidate } from '$app/navigation';
+	import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
+	import { onMount } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { announceStatus } from '$lib/client/status';
 	import PracticeAnswerInput from '$lib/components/questions/PracticeAnswerInput.svelte';
 	import SourceList from '$lib/components/task/SourceList.svelte';
 	import type { AnswerPayload } from '$lib/types/questions';
@@ -25,11 +27,55 @@
 	let errors = $state<Record<number, string>>({});
 	let submitting = $state(false);
 	let submitError = $state('');
+	let selfGradeOverrides = $state<Record<number, number>>({});
 	const timers = new SvelteMap<number, ReturnType<typeof setTimeout>>();
 	const savingPromises = new SvelteMap<number, Promise<boolean>>();
 	const dirty = new SvelteSet<number>();
 	const currentQuestion = $derived(data.attempt.questions[currentIndex]);
 	const saveStatus = $derived.by(() => Object.values(saveStates).includes('error') ? 'error' : dirty.size || Object.values(saveStates).includes('saving') ? 'saving' : Object.values(saveStates).includes('saved') ? 'saved' : 'idle');
+	const gradingPending = $derived(data.attempt.results.some((result) => result.status === 'pending' || result.status === 'processing'));
+
+	export const snapshot = {
+		capture: () => ({ answers, currentIndex, mobilePane }),
+		restore: (value: { answers: Record<number, AnswerPayload>; currentIndex: number; mobilePane: 'source' | 'question' }) => {
+			answers = value.answers;
+			currentIndex = value.currentIndex;
+			mobilePane = value.mobilePane;
+			announceStatus('Dein unvollständiger Versuch wurde wiederhergestellt.', 'info');
+		}
+	};
+
+	onMount(() => {
+		const tabId = crypto.randomUUID();
+		const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(`abipro-attempt-${data.attempt.id}`);
+		if (channel) {
+			channel.onmessage = (event) => {
+				if (event.data?.type === 'open' && event.data?.tabId !== tabId) {
+					announceStatus('Dieser Versuch ist auch in einem anderen Tab geöffnet. Dortige Änderungen können deine überschreiben.', 'warning', 0);
+					channel.postMessage({ type: 'present', tabId });
+				} else if (event.data?.type === 'present' && event.data?.tabId !== tabId) {
+					announceStatus('Dieser Versuch ist auch in einem anderen Tab geöffnet.', 'warning', 0);
+				}
+			};
+			channel.postMessage({ type: 'open', tabId });
+		}
+		const retry = () => { if (dirty.size) void Promise.all([...dirty].map(saveAnswer)); };
+		window.addEventListener('online', retry);
+		let pollTimer: ReturnType<typeof setTimeout> | undefined;
+		let delay = 2_000;
+		const poll = async () => {
+			if (!gradingPending || !navigator.onLine) return;
+			await invalidate(`attempt:practice:${data.attempt.id}`);
+			delay = Math.min(delay * 1.7, 30_000);
+			if (gradingPending) pollTimer = setTimeout(poll, delay);
+		};
+		if (gradingPending) pollTimer = setTimeout(poll, delay);
+		return () => {
+			channel?.close();
+			window.removeEventListener('online', retry);
+			if (pollTimer) clearTimeout(pollTimer);
+		};
+	});
 
 	function emptyAnswer(question: LearnerQuestion): AnswerPayload {
 		switch (question.config.kind) {
@@ -103,11 +149,27 @@
 		if (saved.some((success) => !success)) { submitting = false; return; }
 		const response = await fetch('?/submit', { method: 'POST', headers: { 'x-sveltekit-action': 'true' }, body: new FormData(formElement) });
 		const result: ActionResult = deserialize(await response.text());
-		if (result.type === 'success') { await invalidateAll(); await applyAction(result); }
+		if (result.type === 'success') { await invalidate(`attempt:practice:${data.attempt.id}`); await applyAction(result); announceStatus('Übung abgegeben.', 'success'); }
 		else { await applyAction(result); submitError = 'Die Übung konnte nicht abgegeben werden. Bitte versuche es erneut.'; submitting = false; }
 	}
 
 	function resultFor(questionId: number) { return data.attempt.results.find((result) => result.questionId === questionId); }
+
+	const enhanceSelfGrade: SubmitFunction = ({ formData }) => {
+		const answerId = Number(formData.get('answerId'));
+		const awardedPoints = Number(formData.get('awardedPoints'));
+		if (Number.isFinite(answerId) && Number.isFinite(awardedPoints)) selfGradeOverrides[answerId] = awardedPoints;
+		return async ({ result, update }) => {
+			await update({ reset: false, invalidateAll: false });
+			if (result.type === 'success') {
+				await invalidate(`attempt:practice:${data.attempt.id}`);
+				announceStatus('Selbstbewertung gespeichert.', 'success');
+			} else {
+				delete selfGradeOverrides[answerId];
+				announceStatus('Selbstbewertung konnte nicht gespeichert werden.', 'danger');
+			}
+		};
+	};
 </script>
 
 <svelte:head><title>{data.attempt.title} – Üben – AbiPro</title></svelte:head>
@@ -117,6 +179,7 @@
 	{#if data.attempt.status === 'graded'}
 		<section class="result-summary"><span>Dein Ergebnis</span><strong>{data.attempt.score} / {data.attempt.maxScore}</strong><p>{data.bestAttempt ? `Dein Bestwert: ${data.bestAttempt.score} von ${data.bestAttempt.maxScore} Punkten.` : 'Jeder Versuch macht Muster sichtbar.'}</p></section>
 	{/if}
+	{#if gradingPending}<p class="readiness-message" role="status">Die KI-Bewertung läuft. Der Status wird automatisch aktualisiert …</p>{/if}
 
 	<div class="mobile-tabs" role="tablist"><button class:active={mobilePane === 'question'} onclick={() => mobilePane = 'question'}>Frage</button><button class:active={mobilePane === 'source'} onclick={() => mobilePane = 'source'}>Quellen ({data.attempt.sources.length})</button></div>
 	<div class="player-grid">
@@ -126,11 +189,11 @@
 			{#if showOverview}<nav class="question-overview" aria-label="Fragenübersicht">{#each data.attempt.questions as question, index (question.id)}<button type="button" class:current={index === currentIndex} class:answered={isAnswered(answers[question.id])} onclick={() => { currentIndex = index; showOverview = false; }}>{index + 1}<span class="sr-only">. Frage {isAnswered(answers[question.id]) ? 'beantwortet' : 'offen'}</span></button>{/each}</nav>{/if}
 			{#if data.attempt.instructions}<p class="instructions">{data.attempt.instructions}</p>{/if}
 			{#if form?.message}<p role="alert">{form.message}</p>{/if}{#if submitError}<p role="alert">{submitError}</p>{/if}
-			{#each data.attempt.results.filter((result) => result.status === 'needs_review') as result (result.answerId)}<form id={`self-grade-${result.answerId}`} method="POST" action="?/selfGrade"></form>{/each}
+			{#each data.attempt.results.filter((result) => result.status === 'needs_review') as result (result.answerId)}<form id={`self-grade-${result.answerId}`} method="POST" action="?/selfGrade" use:enhance={enhanceSelfGrade}></form>{/each}
 			{#if data.attempt.results.some((result) => result.status === 'needs_review')}<form id="retry-auto-grade" method="POST" action="?/retryAutoGrade"></form>{/if}
 			<form method="POST" action="?/submit" onsubmit={data.attempt.status === 'in_progress' ? submitAttempt : undefined}>
 				<article class="question-card"><div class="question-title"><span>{currentIndex + 1}</span><h2>{currentQuestion.prompt}</h2><b>{currentQuestion.maxPoints} P.</b></div><PracticeAnswerInput question={currentQuestion} value={answers[currentQuestion.id]} disabled={data.attempt.status !== 'in_progress'} onanswer={(answer) => updateAnswer(currentQuestion.id, answer)} />
-				{#if data.attempt.status !== 'in_progress' && resultFor(currentQuestion.id)}{@const result = resultFor(currentQuestion.id)!}<div class="grading"><section><span>Deine Antwort</span><p>{answerLabel(answers[currentQuestion.id])}</p></section><section><span>Ergebnis</span><strong>{result.status === 'pending' || result.status === 'processing' ? 'Bewertung ausstehend' : `${result.score} von ${result.maximum} Punkten`}</strong></section><section><span>Feedback</span><p>{result.feedback || 'Kein zusätzliches Feedback.'}</p></section>{#if result.solution}<section class="solution"><span>Musterlösung</span><p>{result.solution}</p></section>{/if}{#if result.status === 'needs_review'}<div class="self-grade"><button form="retry-auto-grade">Automatische Bewertung erneut versuchen</button><label>Eigene Punktzahl (0–{result.maximum}) <input form={`self-grade-${result.answerId}`} type="number" name="awardedPoints" min="0" max={result.maximum} step="0.5" required /></label><button form={`self-grade-${result.answerId}`} name="answerId" value={result.answerId}>Selbst bewerten</button></div>{/if}</div>{/if}</article>
+				{#if data.attempt.status !== 'in_progress' && resultFor(currentQuestion.id)}{@const result = resultFor(currentQuestion.id)!}<div class="grading"><section><span>Deine Antwort</span><p>{answerLabel(answers[currentQuestion.id])}</p></section><section><span>Ergebnis</span><strong>{result.status === 'pending' || result.status === 'processing' ? 'Bewertung ausstehend' : `${selfGradeOverrides[result.answerId] ?? result.score} von ${result.maximum} Punkten`}</strong></section><section><span>Feedback</span><p>{result.feedback || 'Kein zusätzliches Feedback.'}</p></section>{#if result.solution}<section class="solution"><span>Musterlösung</span><p>{result.solution}</p></section>{/if}{#if result.status === 'needs_review'}<div class="self-grade"><button form="retry-auto-grade">Automatische Bewertung erneut versuchen</button><label>Eigene Punktzahl (0–{result.maximum}) <input form={`self-grade-${result.answerId}`} type="number" name="awardedPoints" min="0" max={result.maximum} step="0.5" required /></label><button form={`self-grade-${result.answerId}`} name="answerId" value={result.answerId}>Selbst bewerten</button></div>{/if}</div>{/if}</article>
 				<div class="question-actions"><button type="button" class="secondary-action" disabled={currentIndex === 0} onclick={() => currentIndex--}>← Zurück</button>{#if currentIndex < data.attempt.questions.length - 1}<button type="button" onclick={() => currentIndex++}>Nächste Frage →</button>{:else if data.attempt.status === 'in_progress'}<button disabled={submitting}>{submitting ? 'Wird abgegeben …' : 'Übung auswerten'}</button>{/if}</div>
 			</form>
 		</section>

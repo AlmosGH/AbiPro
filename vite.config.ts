@@ -1,4 +1,5 @@
-import adapter from '@sveltejs/adapter-vercel';
+import autoAdapter from '@sveltejs/adapter-auto';
+import vercelAdapter from '@sveltejs/adapter-vercel';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
@@ -10,7 +11,9 @@ export default defineConfig({
 				runes: ({ filename }) => filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			adapter: adapter(),
+			// adapter-vercel emits function symlinks that require Windows Developer Mode.
+			// Use the portable adapter for local/CI verification and Vercel's adapter on the platform itself.
+			adapter: process.env.VERCEL ? vercelAdapter() : autoAdapter(),
 
 			typescript: {
 				config: (config) => {

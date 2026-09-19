@@ -10,6 +10,7 @@
 			: {};
 	}
 	function stringValue(value: unknown) { return typeof value === 'string' ? value : ''; }
+	function positiveNumber(value: unknown, fallback: number) { return typeof value === 'number' && value > 0 ? value : fallback; }
 	function stringArray(value: unknown) {
 		return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 	}
@@ -29,12 +30,14 @@
 	{@const body = rows(content.rows)}
 	{@const hasStructuredText = source.kind === 'text' && text.length > 0}
 	{@const hasStructuredTable = source.kind === 'table' && validTable(headers, body)}
+	{@const imageWidth = positiveNumber(content.width, 1200)}
+	{@const imageHeight = positiveNumber(content.height, 1697)}
 	<article>
 		<h3>{source.title ?? `Quelle ${source.position + 1}`}</h3>
 		{#if source.assetUrl}
-			<a class="source-image" href={source.assetUrl} target="_blank" rel="noreferrer" title="Quelle in voller Größe öffnen"><img src={source.assetUrl} alt={source.assetAltText || source.title || 'Originalseite der Aufgabe'} loading="lazy" /></a>
+			<a class="source-image" href={source.assetUrl} target="_blank" rel="noreferrer" title="Quelle in voller Größe öffnen"><img src={source.assetUrl} alt={source.assetAltText || source.title || 'Originalseite der Aufgabe'} width={imageWidth} height={imageHeight} sizes="(max-width: 768px) calc(100vw - 3rem), (max-width: 1280px) 38vw, 480px" loading={source.position === 0 ? 'eager' : 'lazy'} fetchpriority={source.position === 0 ? 'high' : 'auto'} /></a>
 		{:else if stringValue(content.url)}
-			<a class="source-image" href={stringValue(content.url)} target="_blank" rel="noreferrer" title="Quelle in voller Größe öffnen"><img src={stringValue(content.url)} alt={stringValue(content.alt) || source.title || 'Quelle der Aufgabe'} loading="lazy" /></a>
+			<a class="source-image" href={stringValue(content.url)} target="_blank" rel="noreferrer" title="Quelle in voller Größe öffnen"><img src={stringValue(content.url)} alt={stringValue(content.alt) || source.title || 'Quelle der Aufgabe'} width={imageWidth} height={imageHeight} sizes="(max-width: 768px) calc(100vw - 3rem), (max-width: 1280px) 38vw, 480px" loading={source.position === 0 ? 'eager' : 'lazy'} fetchpriority={source.position === 0 ? 'high' : 'auto'} /></a>
 		{:else if hasStructuredText}
 			<p>{text}</p>
 		{:else if hasStructuredTable}
@@ -61,8 +64,8 @@
 	.source-list { display: grid; gap: var(--space-4); }
 	article { padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 	article h3 { margin-bottom: var(--space-4); }
-	.source-image { display: block; overflow: auto; border-radius: var(--radius-md); cursor: zoom-in; }
-	.source-image img { display: block; width: 100%; }
+	.source-image { display: block; overflow: auto; min-height: 12rem; border-radius: var(--radius-md); background: var(--color-surface-soft); cursor: zoom-in; }
+	.source-image img { display: block; width: 100%; height: auto; }
 	@media(min-width: 48rem) { summary { display: none; } }
 	@media(max-width: 47.99rem) { summary { display: flex; } details[open] summary { margin-bottom: var(--space-4); } }
 </style>

@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { applyAction, deserialize } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
-	import type { ActionResult } from '@sveltejs/kit';
+	import { applyAction, deserialize, enhance } from '$app/forms';
+	import { invalidate } from '$app/navigation';
+	import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 	import { onMount } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { announceStatus } from '$lib/client/status';
 	import PracticeAnswerInput from '$lib/components/questions/PracticeAnswerInput.svelte';
 	import SourceList from '$lib/components/task/SourceList.svelte';
 	import type { AnswerPayload } from '$lib/types/questions';
@@ -45,6 +46,7 @@
 	let finalizationError = $state('');
 	let remainingMilliseconds = $state(initialRemaining());
 	let clientExpired = $state(initiallyExpired());
+	let selfGradeOverrides = $state<Record<number, number>>({});
 	const timers = new SvelteMap<number, ReturnType<typeof setTimeout>>();
 	const savingPromises = new SvelteMap<number, Promise<boolean>>();
 	const dirty = new SvelteSet<number>();
@@ -54,6 +56,17 @@
 	const currentTask = $derived(data.attempt.tasks[currentTaskIndex]);
 	const remainingLabel = $derived(formatRemaining(remainingMilliseconds));
 	const timerAnnouncement = $derived(remainingMilliseconds <= 0 ? 'Die Bearbeitungszeit ist abgelaufen.' : `Noch ${Math.ceil(remainingMilliseconds / 60_000)} Minuten Bearbeitungszeit.`);
+	const gradingPending = $derived(data.attempt.tasks.some((task) => task.results.some((result) => result.status === 'pending' || result.status === 'processing')));
+
+	export const snapshot = {
+		capture: () => ({ answers, currentTaskIndex, reviewing }),
+		restore: (value: { answers: Record<number, AnswerPayload>; currentTaskIndex: number; reviewing: boolean }) => {
+			answers = value.answers;
+			currentTaskIndex = value.currentTaskIndex;
+			reviewing = value.reviewing;
+			announceStatus('Deine unvollständige Prüfung wurde wiederhergestellt.', 'info');
+		}
+	};
 
 	onMount(() => {
 		if (data.attempt.status !== 'in_progress') return;
@@ -75,6 +88,38 @@
 		const interval = setInterval(update, 250);
 		update();
 		return () => clearInterval(interval);
+	});
+
+	onMount(() => {
+		const tabId = crypto.randomUUID();
+		const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(`abipro-attempt-${data.attempt.id}`);
+		if (channel) {
+			channel.onmessage = (event) => {
+				if (event.data?.type === 'open' && event.data?.tabId !== tabId) {
+					announceStatus('Diese Prüfung ist auch in einem anderen Tab geöffnet. Bearbeite sie nur in einem Tab.', 'warning', 0);
+					channel.postMessage({ type: 'present', tabId });
+				} else if (event.data?.type === 'present' && event.data?.tabId !== tabId) {
+					announceStatus('Diese Prüfung ist auch in einem anderen Tab geöffnet.', 'warning', 0);
+				}
+			};
+			channel.postMessage({ type: 'open', tabId });
+		}
+		const retry = () => { if (dirty.size && !clientExpired) void Promise.all([...dirty].map(saveAnswer)); };
+		window.addEventListener('online', retry);
+		let pollTimer: ReturnType<typeof setTimeout> | undefined;
+		let delay = 2_000;
+		const poll = async () => {
+			if (!gradingPending || !navigator.onLine) return;
+			await invalidate(`attempt:exam:${data.attempt.id}`);
+			delay = Math.min(delay * 1.7, 30_000);
+			if (gradingPending) pollTimer = setTimeout(poll, delay);
+		};
+		if (gradingPending) pollTimer = setTimeout(poll, delay);
+		return () => {
+			channel?.close();
+			window.removeEventListener('online', retry);
+			if (pollTimer) clearTimeout(pollTimer);
+		};
 	});
 
 	function emptyAnswer(question: LearnerQuestion): AnswerPayload {
@@ -172,8 +217,9 @@
 				await applyAction(result);
 				throw new Error('Die Prüfung konnte nicht abgeschlossen werden. Bitte versuche es erneut.');
 			}
-			await invalidateAll();
+			await invalidate(`attempt:exam:${data.attempt.id}`);
 			await applyAction(result);
+			announceStatus('Prüfung abgegeben.', 'success');
 		} catch (cause) {
 			finalizationError = cause instanceof Error ? cause.message : 'Die Prüfung konnte nicht abgeschlossen werden.';
 			finalizing = false;
@@ -200,6 +246,22 @@
 		currentTaskIndex = taskIndex;
 		reviewing = false;
 	}
+
+	const enhanceSelfGrade: SubmitFunction = ({ formData }) => {
+		const answerId = Number(formData.get('answerId'));
+		const awardedPoints = Number(formData.get('awardedPoints'));
+		if (Number.isFinite(answerId) && Number.isFinite(awardedPoints)) selfGradeOverrides[answerId] = awardedPoints;
+		return async ({ result, update }) => {
+			await update({ reset: false, invalidateAll: false });
+			if (result.type === 'success') {
+				await invalidate(`attempt:exam:${data.attempt.id}`);
+				announceStatus('Selbstbewertung gespeichert.', 'success');
+			} else {
+				delete selfGradeOverrides[answerId];
+				announceStatus('Selbstbewertung konnte nicht gespeichert werden.', 'danger');
+			}
+		};
+	};
 </script>
 
 <svelte:head><title>Prüfung – AbiPro</title></svelte:head>
@@ -217,6 +279,7 @@
 	</div>
 
 	{#if clientExpired && data.attempt.status === 'in_progress'}<p role="status" class="readiness-message">Die Bearbeitungszeit ist abgelaufen. Deine Prüfung wird abgeschlossen …</p>{/if}
+	{#if gradingPending}<p role="status" class="readiness-message">Die KI-Bewertung läuft. Der Status wird automatisch mit wachsendem Abstand geprüft …</p>{/if}
 	{#if data.attempt.status === 'in_progress' && remainingMilliseconds <= 5 * 60 * 1000 && remainingMilliseconds > 60 * 1000}<div class="time-warning" role="status"><strong>Noch 5 Minuten</strong><span>Prüfe offene Aufgaben und plane Zeit für die Abgabe ein.</span></div>{/if}
 	{#if data.attempt.status === 'in_progress' && remainingMilliseconds <= 60 * 1000 && remainingMilliseconds > 0}<div class="time-warning critical" role="alert"><strong>Letzte Minute</strong><span>Deine Prüfung wird bei Ablauf automatisch abgegeben.</span></div>{/if}
 	{#if form?.message}<p role="alert" class="save-error">{form.message}</p>{/if}
@@ -243,7 +306,7 @@
 		<h3>Quellen</h3>
 		<SourceList sources={currentTask.sources} />
 
-		{#each currentTask.results.filter((result) => result.status === 'needs_review') as result (result.answerId)}<form id={`self-grade-${result.answerId}`} method="POST" action="?/selfGrade"></form>{/each}
+		{#each currentTask.results.filter((result) => result.status === 'needs_review') as result (result.answerId)}<form id={`self-grade-${result.answerId}`} method="POST" action="?/selfGrade" use:enhance={enhanceSelfGrade}></form>{/each}
 		<form method="POST" action="?/finish" onsubmit={data.attempt.status === 'in_progress' ? (event) => { event.preventDefault(); void finishAttempt(false); } : undefined}>
 			{#each currentTask.questions as question, index (question.id)}
 				<article>
@@ -255,7 +318,7 @@
 						</p>
 					{:else if resultFor(question.id)}
 						{@const result = resultFor(question.id)!}
-						<p><strong>{result.status === 'pending' || result.status === 'processing' ? 'Bewertung ausstehend' : `${result.score} von ${result.maximum} Punkten · ${result.correctness === 'correct' ? 'Richtig' : result.correctness === 'partial' ? 'Teilweise richtig' : result.status === 'needs_review' ? 'Selbstbewertung nötig' : 'Nicht richtig'}`}</strong></p>
+						<p><strong>{result.status === 'pending' || result.status === 'processing' ? 'Bewertung ausstehend' : `${selfGradeOverrides[result.answerId] ?? result.score} von ${result.maximum} Punkten · ${result.correctness === 'correct' ? 'Richtig' : result.correctness === 'partial' ? 'Teilweise richtig' : result.status === 'needs_review' ? 'Selbstbewertung nötig' : 'Nicht richtig'}`}</strong></p>
 						<p>{result.feedback}</p>
 						{#if result.status === 'needs_review'}
 							<div class="self-grade"><label>Eigene Punktzahl (0–{result.maximum}) <input form={`self-grade-${result.answerId}`} type="number" name="awardedPoints" min="0" max={result.maximum} step="0.5" required /></label><button form={`self-grade-${result.answerId}`} name="answerId" value={result.answerId}>Selbst bewerten</button></div>

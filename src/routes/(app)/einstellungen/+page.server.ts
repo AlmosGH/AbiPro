@@ -15,6 +15,7 @@ export const actions: Actions = {
 		const parsed = z.object({ displayName: z.string().trim().min(1).max(80) }).safeParse(Object.fromEntries(await request.formData()));
 		if (!parsed.success) return fail(400, { message: 'Der Anzeigename muss 1 bis 80 Zeichen lang sein.' });
 		await getDb().update(profiles).set({ displayName: parsed.data.displayName }).where(eq(profiles.id, actor.userId));
+		locals.profile = { ...actor.profile, displayName: parsed.data.displayName };
 		return { updated: true };
 	},
 	deleteAccount: async ({ locals, request }) => {

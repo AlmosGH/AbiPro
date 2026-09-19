@@ -10,7 +10,8 @@
 	const needsWork = $derived([...ranked].reverse().slice(0, 3));
 	const history = $derived(data.progress.recent.filter((attempt) => historyFilter === 'all' || attempt.kind === historyFilter));
 	const trend = $derived([...data.progress.recent].filter((attempt) => attempt.status === 'graded' && attempt.score !== null).reverse());
-	let selectedTrendIndex = $state(Math.max(trend.length - 1, 0));
+	function initialTrendIndex() { return Math.max(trend.length - 1, 0); }
+	let selectedTrendIndex = $state(initialTrendIndex());
 	const chartX = (index: number) => trend.length === 1 ? 50 : 5 + index * 90 / (trend.length - 1);
 	const attemptPercent = (attempt: (typeof trend)[number]) => 100 * Number(attempt.score) / attempt.maxScore;
 	const cumulativePercent = (index: number) => trend.slice(0, index + 1).reduce((sum, attempt) => sum + attemptPercent(attempt), 0) / (index + 1);

@@ -3,6 +3,7 @@ import { getReferenceData, listPublishedTasks } from '$lib/server/content';
 import type { PageServerLoad } from './$types';
 import { requireActor } from '$lib/server/authorization';
 import { getPracticedTaskVersionIds, getProfileProgress } from '$lib/server/profile-progress';
+import { timeQuery } from '$lib/server/query-timing';
 
 const positiveInteger = z.coerce.number().int().positive();
 function optionalId(value: string | null) {
@@ -10,7 +11,8 @@ function optionalId(value: string | null) {
 	return result.success ? result.data : undefined;
 }
 
-export const load: PageServerLoad = async ({ url, locals }) => {
+export const load: PageServerLoad = async ({ url, locals, depends }) => {
+	depends('app:tasks');
 	const actor = requireActor(locals);
 	const query = url.searchParams.get('q')?.trim() || undefined;
 	const sessionValue = url.searchParams.get('session');
@@ -28,10 +30,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		? sortValue
 		: 'newest';
 	const page = optionalId(url.searchParams.get('page')) ?? 1;
-	const taskRows = await listPublishedTasks(filters);
-	const references = await getReferenceData();
-	const practiced = await getPracticedTaskVersionIds(actor.userId);
-	const progress = sort === 'weakest' ? await getProfileProgress(actor.userId) : null;
+	const [taskRows, references, practiced, progress] = await timeQuery('task_browsing', () => Promise.all([
+		listPublishedTasks(filters),
+		getReferenceData(),
+		getPracticedTaskVersionIds(actor.userId),
+		sort === 'weakest' ? getProfileProgress(actor.userId) : Promise.resolve(null)
+	]), { userId: actor.userId });
 	const topicScores = new Map(progress?.topics.map((topic) => [topic.name, topic.averagePercent ?? 101]) ?? []);
 	const tasks = taskRows.map((task) => ({ ...task, practiced: practiced.has(task.taskVersionId) })).sort((a, b) => {
 		if (sort === 'unpracticed') return Number(a.practiced) - Number(b.practiced) || b.year - a.year;

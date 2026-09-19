@@ -7,20 +7,21 @@ import { requireActor } from '$lib/server/authorization';
 import { selfGradeAnswer } from '$lib/server/ai-grading.server';
 import type { Actions, PageServerLoad } from './$types';
 import { enforceRateLimit } from '$lib/server/rate-limit';
+import { timeQuery } from '$lib/server/query-timing';
 
 const attemptIdSchema = z.coerce.number().int().positive();
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, depends }) => {
 	const actor = requireActor(locals);
 	const parsedId = attemptIdSchema.safeParse(params.attemptId);
 	if (!parsedId.success) error(404, 'Übungsversuch nicht gefunden.');
-	const attempt = await getPracticeAttempt(actor.userId, parsedId.data);
+	depends(`attempt:practice:${parsedId.data}`);
+	const attempt = await timeQuery('practice_attempt_loading', () => getPracticeAttempt(actor.userId, parsedId.data), { attemptId: parsedId.data });
 	if (!attempt) error(404, 'Übungsversuch nicht gefunden.');
-	const sources = [];
-	for (const { assetPath, ...source } of attempt.sources) {
-		sources.push({ ...source, assetUrl: assetPath ? await createAssetSignedUrl(assetPath) : null });
-	}
-	const bestAttempt = await getBestPracticeScore(actor.userId, attempt.taskVersionId);
+	const [sources, bestAttempt] = await Promise.all([
+		Promise.all(attempt.sources.map(async ({ assetPath, ...source }) => ({ ...source, assetUrl: assetPath ? await createAssetSignedUrl(assetPath) : null }))),
+		getBestPracticeScore(actor.userId, attempt.taskVersionId)
+	]);
 	return { attempt: { ...attempt, sources }, bestAttempt };
 };
 

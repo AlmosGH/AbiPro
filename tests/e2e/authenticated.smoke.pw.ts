@@ -8,7 +8,7 @@ test('an authenticated learner can open the task browser', async ({ page }) => {
 	await page.goto('/login');
 	await page.getByLabel('E-Mail-Adresse').fill(email!);
 	await page.getByLabel('Passwort').fill(password!);
-	await page.getByRole('button', { name: 'Anmelden' }).click();
+	await page.getByRole('button', { name: 'Anmelden', exact: true }).click();
 	await expect(page).toHaveURL(/\/$/);
 
 	await page.getByRole('link', { name: 'Aufgaben', exact: true }).click();

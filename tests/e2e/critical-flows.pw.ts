@@ -9,7 +9,8 @@ async function login(page: import('@playwright/test').Page, user = email, secret
 	await page.goto('/login');
 	await page.getByLabel('E-Mail-Adresse').fill(user!);
 	await page.getByLabel('Passwort').fill(secret!);
-	await page.getByRole('button', { name: 'Anmelden' }).click();
+	await page.getByRole('button', { name: 'Anmelden', exact: true }).click();
+	await expect(page).toHaveURL(/\/$/);
 }
 
 test.describe('learner critical paths', () => {
@@ -30,6 +31,9 @@ test.describe('learner critical paths', () => {
 		}
 		await page.getByRole('button', { name: 'Übung auswerten' }).click();
 		await expect(page.getByText('Dein Ergebnis')).toBeVisible();
+		await page.getByRole('navigation', { name: 'Hauptnavigation' }).getByRole('link', { name: 'Aufgaben', exact: true }).click();
+		await expect(page).toHaveURL(/\/aufgaben$/);
+		await expect(page.getByRole('heading', { name: 'Finde deine nächste Aufgabe', level: 1 })).toBeVisible();
 	});
 
 	test('an expired server fixture is finalized', async ({ page }) => {
