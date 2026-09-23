@@ -37,7 +37,7 @@ try {
 		await tx.unsafe("delete from app_private.sources where task_version_id in (select v.id from app_private.task_versions v join app_private.tasks t on t.id = v.task_id where t.origin = 'ujkor')");
 		await tx.unsafe(`insert into app_private.sources (task_version_id, position, kind, title, content)
 			select task_version_id, position, kind::app_private.source_kind, title, content
-			from jsonb_to_recordset($1::jsonb) as entry(task_version_id bigint, position integer, kind text, title text, content jsonb)`, [JSON.stringify(insertions)]);
+			from jsonb_to_recordset($1::jsonb) as entry(task_version_id bigint, position integer, kind text, title text, content jsonb)`, [tx.json(insertions)]);
 		await tx.unsafe('alter table app_private.sources enable trigger protect_source_version');
 	});
 	const [result] = await sql.unsafe(`select count(*)::integer as sources,
