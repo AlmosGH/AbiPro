@@ -8,6 +8,9 @@
 	import { LANGUAGE_CONTEXT, translate, type LanguageContext, type Locale } from '$lib/i18n';
 	import { getSocialMetadata } from '$lib/social';
 	import type { LayoutProps } from './$types';
+	import { injectSpeedInsights } from '@vercel/speed-insights/sveltekit';
+
+	injectSpeedInsights();
 
 	let { data, children }: LayoutProps = $props();
 	function initialLocale(): Locale { return data.locale; }
