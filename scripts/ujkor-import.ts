@@ -19,6 +19,15 @@ type InputTask = {
 	title: string; heading: string; maxPoints: number; body: string;
 	images: string[]; answerKey: string; answerHeading: string;
 };
+type OriginalPage = { url: string; width: number; height: number; page: number };
+const pageMap = JSON.parse(await readFile(join(root, 'scripts', 'ujkor-page-map.json'), 'utf8')) as Record<string, OriginalPage[]>;
+function originalPages(slug: string) {
+	const pages = pageMap[slug];
+	if (!pages?.length || pages.some((page) => !page.url.startsWith('/ujkor-pages/') || page.width <= 0 || page.height <= 0)) {
+		throw new Error('Missing original task-book pages for ' + slug);
+	}
+	return pages;
+}
 const option = z.object({ id: z.string().min(1), label: z.string().min(1) });
 const config = z.discriminatedUnion('kind', [
 	z.object({ kind: z.literal('choice'), options: z.array(option).min(2) }),
@@ -142,12 +151,12 @@ async function generateAll() {
 				'Task text (visible to learners):\n' + source.body,
 				'Matching answer key (grading evidence only, NEVER learner-visible):\n' + source.answerKey,
 				'Choose exactly one primary official topic code from: ' + OFFICIAL_TOPICS.map(([code, name]) => code + ' ' + name).join('; '),
-				'Return instructions and every answerable subquestion as a separate question with suitable config and gradingRule. Correct keys must follow the answer key exactly. Do not include answer text in prompts or instructions. Question points must sum to the printed total. Use needsReview=true if a figure or ambiguous solution prevents reliable conversion, and explain why briefly. The image parts, if any, follow in the order listed in the original task.'
+				'Return instructions and every answerable subquestion as a separate question with suitable config and gradingRule. Correct keys must follow the answer key exactly. Do not include answer text in prompts or instructions. Question points must sum to the printed total. Use needsReview=true if a figure or ambiguous solution prevents reliable conversion, and explain why briefly. The original task-book page images follow. A page may include an adjacent task; extract questions only for the source heading above.'
 			].join('\n\n');
 			let parsed: Generated | null = null;
 			let correction = '';
 			for (let attempt = 0; attempt < 3 && !parsed; attempt++) {
-				const raw = await generateContent(prompt + correction, source.images);
+				const raw = await generateContent(prompt + correction, originalPages(source.slug).map((page) => page.url));
 				await writeFile(rawPath(source.slug), JSON.stringify(raw, null, 2));
 				try {
 					const candidate = generated.parse(normalize(raw));
@@ -176,6 +185,7 @@ async function validateAll() {
 	let ready = 0, review = 0;
 	for (const source of sourceTasks) {
 		try {
+			originalPages(source.slug);
 			const raw = JSON.parse(await readFile(taskPath(source.slug), 'utf8'));
 			const parsed = generated.parse(raw);
 			if (raw.sourceHash !== digest(source)) issues.push({ slug: source.slug, issue: 'source changed since generation' });
@@ -215,8 +225,9 @@ async function publishAll() {
 				const [task] = await tx.unsafe('insert into app_private.tasks (slug, origin, status) values ($1, $2, $3) returning id', [source.slug, 'ujkor', 'draft']);
 				const [version] = await tx.unsafe('insert into app_private.task_versions (task_id, version, status, title, instructions, curriculum_id, period_id, exam_session_id, history_scope, max_points) values ($1, 1, $2, $3, $4, null, $5, null, $6, $7) returning id', [task.id, 'draft', source.title, value.instructions, period.id, source.scope, source.maxPoints]);
 				for (const topicId of topicIds) await tx.unsafe('insert into app_private.task_version_topics (task_version_id, topic_id) values ($1, $2)', [version.id, topicId]);
-				const sources = [{ kind: 'text', title: 'Originalaufgabe', content: { text: source.body } }, ...source.images.map((image, i) => ({ kind: 'image', title: 'Abbildung ' + (i + 1), content: { url: image } }))];
-				for (const [position, item] of sources.entries()) await tx.unsafe('insert into app_private.sources (task_version_id, position, kind, title, content) values ($1, $2, $3, $4, $5)', [version.id, position, item.kind, item.title, tx.json(item.content)]);
+				for (const [position, page] of originalPages(source.slug).entries()) {
+					await tx.unsafe('insert into app_private.sources (task_version_id, position, kind, title, content) values ($1, $2, $3, $4, $5)', [version.id, position, 'image', 'Originalseite ' + (position + 1), tx.json({ url: page.url, width: page.width, height: page.height })]);
+				}
 				for (const [position, item] of value.questions.entries()) await tx.unsafe('insert into app_private.questions (task_version_id, position, kind, prompt, config, grading_rule, max_points) values ($1, $2, $3, $4, $5, $6, $7)', [version.id, position, item.kind, item.prompt, tx.json(item.config), tx.json(item.gradingRule), item.maxPoints]);
 				if (taskStatus === 'published') {
 					await tx.unsafe("update app_private.task_versions set status = 'published', published_at = now() where id = $1", [version.id]);

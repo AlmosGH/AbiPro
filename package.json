@@ -26,9 +26,11 @@
 		,"exams:validate": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts validate"
 		,"exams:publish": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts publish",
 		"ujkor:extract": "python3 scripts/extract-ujkor.py",
+		"ujkor:pages": "python3 scripts/render-ujkor-pages.py",
 		"ujkor:generate": "node --env-file=.env --experimental-strip-types scripts/ujkor-import.ts generate",
 		"ujkor:validate": "node --env-file=.env --experimental-strip-types scripts/ujkor-import.ts validate",
 		"ujkor:publish": "node --env-file=.env --experimental-strip-types scripts/ujkor-import.ts publish",
+		"ujkor:update-sources": "node --env-file=.env --experimental-strip-types scripts/ujkor-page-sources.ts",
 		"history:classify": "node --env-file=.env --experimental-strip-types scripts/generate-history-tags.ts",
 		"history:apply": "node --env-file=.env --experimental-strip-types scripts/apply-history-taxonomy.ts --apply"
 	},
