@@ -15,6 +15,7 @@ import { isAiEligibleMiss, processAiGradesForAttempt, queueAiGrade } from '$lib/
 
 const eligibleConditions = () => and(
 	eq(tasks.status, 'published'),
+	eq(tasks.origin, 'official'),
 	eq(taskVersions.status, 'published'),
 	inArray(taskVersions.examPosition, MOCK_EXAM_CONFIG.distribution.map((rule) => rule.position))
 );

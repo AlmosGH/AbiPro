@@ -3,16 +3,30 @@ import { gradingRuleSchema, questionConfigSchema } from '$lib/types/questions';
 
 const positiveId = z.coerce.number().int().positive();
 
-export const taskMetadataSchema = z.object({
+const taskMetadataBaseSchema = z.object({
 	slug: z.string().trim().min(3).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Der Slug darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten.'),
 	title: z.string().trim().min(3).max(200),
 	instructions: z.string().trim().max(5000).optional().default(''),
-	curriculumId: positiveId,
+	origin: z.enum(['official', 'ujkor']).default('official'),
+	historyScope: z.enum(['hungarian', 'global']).default('global'),
+	curriculumId: z.preprocess((value) => value === '' || value === null || value === undefined ? null : value, positiveId.nullable()),
 	periodId: positiveId,
-	examSessionId: positiveId,
+	examSessionId: z.preprocess((value) => value === '' || value === null || value === undefined ? null : value, positiveId.nullable()),
 	examPosition: z.preprocess((value) => value === '' || value === null ? null : value, z.coerce.number().int().min(1).max(12).nullable()).optional().default(null),
 	maxPoints: z.coerce.number().positive().max(1000)
 });
+
+function validateOrigin(metadata: Pick<z.output<typeof taskMetadataBaseSchema>, 'origin' | 'curriculumId' | 'examSessionId' | 'examPosition'>, context: z.RefinementCtx) {
+	if (metadata.origin === 'official' && (!metadata.curriculumId || !metadata.examSessionId)) {
+		context.addIssue({ code: 'custom', message: 'Offizielle Aufgaben benötigen Lehrplan und Prüfungstermin.' });
+	}
+	if (metadata.origin === 'ujkor' && (metadata.curriculumId || metadata.examSessionId || metadata.examPosition)) {
+		context.addIssue({ code: 'custom', message: 'Újkor.hu-Aufgaben dürfen keinem offiziellen Lehrplan oder Prüfungstermin zugeordnet werden.' });
+	}
+}
+
+export const taskMetadataSchema = taskMetadataBaseSchema.superRefine(validateOrigin);
+export const editableTaskMetadataSchema = taskMetadataBaseSchema.omit({ slug: true }).superRefine(validateOrigin);
 
 export const sourceDraftSchema = z.object({
 	kind: z.enum(['text', 'image', 'table', 'map']),

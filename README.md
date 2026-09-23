@@ -228,6 +228,20 @@ npm run exams:publish -- 2006_tavasz
 
 Jobs live in `tmp/exam-imports/<exam>/`. `prepare` is safe to repeat; `generate` requires `GEMINI_API_KEY` and optionally uses `GEMINI_IMPORT_MODEL` (otherwise `GEMINI_MODEL`). Review `review/report.json` before publishing. Publishing refuses invalid, stale, or previously imported tasks and never deletes unrelated content.
 
+## Újkor.hu collection and official history taxonomy
+
+The Újkor.hu DOCX task books and answer keys belong in `ujkor.hu-feladatok/`. Run `npm run ujkor:extract` with Python packages `python-docx` and `Pillow` installed; EMF illustrations also require LibreOffice. Extraction writes `data/ujkor-tasks.json` and web images under `static/ujkor/`. Gemini then converts each task with its matching answer key into answerable questions:
+
+```bash
+npm run ujkor:generate
+npm run ujkor:validate
+npm run ujkor:publish
+```
+
+Review `data/ujkor-generated/report.json` before publishing. The importer is resumable by slug and puts uncertain conversions into drafts. Újkor.hu tasks have their own collection origin and Hungarian/global history scope; they have no official curriculum or exam session and are excluded from simulated official exams.
+
+The seven eras and 43 topics in `src/lib/history-taxonomy.ts` come from the 2024 official history exam specification. To classify an existing database before importing Újkor.hu tasks, run `npm run history:classify`, inspect the generated `data/history-tags/` batches, then run `npm run history:apply`. The latter replaces old era and topic labels on all task versions. Admins can view these reference lists but cannot add arbitrary labels.
+
 The authenticated Playwright smoke test uses a dedicated learner account. Install Chromium once,
 set `E2E_USER_EMAIL` and `E2E_USER_PASSWORD`, then run:
 

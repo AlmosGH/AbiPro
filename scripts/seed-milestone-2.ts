@@ -1,4 +1,6 @@
 import postgres from 'postgres';
+import { periodSlug, topicSlug } from '../src/lib/history-taxonomy.ts';
+import { classifyHistoryTask } from '../src/lib/history-classification.ts';
 
 const connectionString = process.env.DATABASE_MIGRATION_URL ?? process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_MIGRATION_URL or DATABASE_URL is required.');
@@ -38,16 +40,14 @@ try {
 			on conflict (code) do update set name = excluded.name returning id
 		`;
 		for (const sample of samples) {
+			const classification = classifyHistoryTask({ title: sample.title, oldPeriod: sample.period, oldTopics: [sample.topicName], examPosition: null });
 			const [period] = await transaction<{ id: number }[]>`
-				insert into app_private.historical_periods (slug, name, position)
-				values (${sample.period}, ${sample.periodName}, 0)
-				on conflict (slug) do update set name = excluded.name returning id
+				select id from app_private.historical_periods where slug = ${periodSlug(String(classification.period))}
 			`;
 			const [topic] = await transaction<{ id: number }[]>`
-				insert into app_private.topics (slug, name, period_id)
-				values (${sample.topic}, ${sample.topicName}, ${period.id})
-				on conflict (slug) do update set name = excluded.name, period_id = excluded.period_id returning id
+				select id from app_private.topics where slug = ${topicSlug(classification.topic)}
 			`;
+			if (!period || !topic) throw new Error('Official history taxonomy is not installed.');
 			const [session] = await transaction<{ id: number }[]>`
 				insert into app_private.exam_sessions (year, session)
 				values (${sample.year}, ${sample.session})
@@ -57,8 +57,8 @@ try {
 			if (existing.length) continue;
 			const [task] = await transaction<{ id: number }[]>`insert into app_private.tasks (slug, status) values (${sample.slug}, 'draft') returning id`;
 			const [version] = await transaction<{ id: number }[]>`
-				insert into app_private.task_versions (task_id, version, status, title, instructions, curriculum_id, period_id, exam_session_id, max_points)
-				values (${task.id}, 1, 'draft', ${sample.title}, 'Beispielinhalt: vor einer Veröffentlichung durch echte Prüfungsinhalte ersetzen.', ${curriculum.id}, ${period.id}, ${session.id}, ${sample.maxPoints}) returning id
+				insert into app_private.task_versions (task_id, version, status, title, instructions, curriculum_id, period_id, exam_session_id, history_scope, max_points)
+				values (${task.id}, 1, 'draft', ${sample.title}, 'Beispielinhalt: vor einer Veröffentlichung durch echte Prüfungsinhalte ersetzen.', ${curriculum.id}, ${period.id}, ${session.id}, ${classification.scope}, ${sample.maxPoints}) returning id
 			`;
 			await transaction`insert into app_private.task_version_topics (task_version_id, topic_id) values (${version.id}, ${topic.id})`;
 			await transaction`insert into app_private.sources (task_version_id, position, kind, title, content) values (${version.id}, 0, 'text', 'Quelle A', ${transaction.json({ text: sample.source })})`;

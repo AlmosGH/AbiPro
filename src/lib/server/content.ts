@@ -48,10 +48,11 @@ export async function getReferenceData() {
 export async function createTask(actor: Actor, metadata: TaskMetadata) {
 	assertAdmin(actor);
 	return getDb().transaction(async (transaction) => {
-		const [task] = await transaction.insert(tasks).values({ slug: metadata.slug, createdBy: actor.userId }).returning({ id: tasks.id });
+		const [task] = await transaction.insert(tasks).values({ slug: metadata.slug, origin: metadata.origin, createdBy: actor.userId }).returning({ id: tasks.id });
 		const [version] = await transaction.insert(taskVersions).values({
 			taskId: task.id, version: 1, title: metadata.title, instructions: metadata.instructions || null,
 			curriculumId: metadata.curriculumId, periodId: metadata.periodId, examSessionId: metadata.examSessionId,
+			historyScope: metadata.historyScope,
 			examPosition: metadata.examPosition, maxPoints: metadata.maxPoints, createdBy: actor.userId
 		}).returning({ id: taskVersions.id });
 		return version;
@@ -60,12 +61,12 @@ export async function createTask(actor: Actor, metadata: TaskMetadata) {
 
 export async function listAdminTasks() {
 	const rows = await getDb().select({
-		taskId: tasks.id, slug: tasks.slug, taskStatus: tasks.status, versionId: taskVersions.id,
+		taskId: tasks.id, slug: tasks.slug, origin: tasks.origin, taskStatus: tasks.status, versionId: taskVersions.id,
 		version: taskVersions.version, versionStatus: taskVersions.status, title: taskVersions.title,
 		updatedAt: taskVersions.updatedAt, curriculumId: taskVersions.curriculumId,
-		periodId: taskVersions.periodId, year: examSessions.year, session: examSessions.session
+		periodId: taskVersions.periodId, historyScope: taskVersions.historyScope, year: examSessions.year, session: examSessions.session
 	}).from(tasks).innerJoin(taskVersions, eq(taskVersions.taskId, tasks.id))
-		.innerJoin(examSessions, eq(examSessions.id, taskVersions.examSessionId))
+		.leftJoin(examSessions, eq(examSessions.id, taskVersions.examSessionId))
 		.orderBy(desc(taskVersions.updatedAt), desc(taskVersions.version));
 	const latest = new Map<number, (typeof rows)[number]>();
 	for (const row of rows) if (!latest.has(row.taskId) || row.version > latest.get(row.taskId)!.version) latest.set(row.taskId, row);
@@ -79,6 +80,8 @@ export interface AdminTaskFilters {
 	periodId?: number;
 	topicId?: number;
 	year?: number;
+	origin?: 'official' | 'ujkor';
+	historyScope?: 'hungarian' | 'global';
 }
 
 export async function listFilteredAdminTasks(filters: AdminTaskFilters) {
@@ -93,6 +96,8 @@ export async function listFilteredAdminTasks(filters: AdminTaskFilters) {
 		if (filters.status === 'draft' && (row.taskStatus === 'archived' || row.versionStatus !== 'draft')) return false;
 		if (filters.status === 'published' && (row.taskStatus === 'archived' || row.versionStatus !== 'published')) return false;
 		if (filters.curriculumId && row.curriculumId !== filters.curriculumId) return false;
+		if (filters.origin && row.origin !== filters.origin) return false;
+		if (filters.historyScope && row.historyScope !== filters.historyScope) return false;
 		if (filters.periodId && row.periodId !== filters.periodId) return false;
 		if (filters.year && row.year !== filters.year) return false;
 		if (filters.topicId && !topicRows.some((topic) => topic.versionId === row.versionId && topic.topicId === filters.topicId)) return false;
@@ -103,10 +108,10 @@ export async function listFilteredAdminTasks(filters: AdminTaskFilters) {
 export async function getAdminTaskVersion(id: number) {
 	const db = getDb();
 	const [version] = await db.select({
-		id: taskVersions.id, taskId: tasks.id, slug: tasks.slug, taskStatus: tasks.status,
+		id: taskVersions.id, taskId: tasks.id, slug: tasks.slug, origin: tasks.origin, taskStatus: tasks.status,
 		version: taskVersions.version, status: taskVersions.status, title: taskVersions.title,
 		instructions: taskVersions.instructions, curriculumId: taskVersions.curriculumId,
-		periodId: taskVersions.periodId, examSessionId: taskVersions.examSessionId,
+		periodId: taskVersions.periodId, examSessionId: taskVersions.examSessionId, historyScope: taskVersions.historyScope,
 		examPosition: taskVersions.examPosition, maxPoints: taskVersions.maxPoints, publishedAt: taskVersions.publishedAt
 	}).from(taskVersions).innerJoin(tasks, eq(tasks.id, taskVersions.taskId)).where(eq(taskVersions.id, id));
 	if (!version) return null;
@@ -119,15 +124,21 @@ export async function getAdminTaskVersion(id: number) {
 export async function saveTaskDraft(actor: Actor, id: number, metadata: Omit<TaskMetadata, 'slug'>, topicIds: number[], sourceDrafts: SourceDraft[], questionDrafts: QuestionDraft[]) {
 	assertAdmin(actor);
 	return getDb().transaction(async (transaction) => {
-		const [version] = await transaction.select({ status: taskVersions.status }).from(taskVersions).where(eq(taskVersions.id, id)).for('update');
+		const [version] = await transaction.select({ status: taskVersions.status, taskId: taskVersions.taskId, origin: tasks.origin }).from(taskVersions).innerJoin(tasks, eq(tasks.id, taskVersions.taskId)).where(eq(taskVersions.id, id)).for('update');
 		if (!version) throw new Error('Aufgabenversion nicht gefunden.');
 		if (version.status !== 'draft') throw new Error('Nur Entwürfe können bearbeitet werden.');
+		if (version.origin !== metadata.origin) throw new Error('Die Sammlung einer bestehenden Aufgabe kann nicht geändert werden.');
+		const selectedTopics = await transaction.select({ id: topics.id, periodId: topics.periodId }).from(topics).where(inArray(topics.id, topicIds));
+		if (!topicIds.length || selectedTopics.length !== new Set(topicIds).size || selectedTopics.some((topic) => topic.periodId !== metadata.periodId)) {
+			throw new Error('Die Themen müssen zur ausgewählten Epoche gehören.');
+		}
 		const pointError = validatePointTotal(metadata.maxPoints, questionDrafts);
 		if (pointError) throw new Error(pointError);
 
 		await transaction.update(taskVersions).set({
 			title: metadata.title, instructions: metadata.instructions || null, curriculumId: metadata.curriculumId,
-			periodId: metadata.periodId, examSessionId: metadata.examSessionId, examPosition: metadata.examPosition, maxPoints: metadata.maxPoints
+			periodId: metadata.periodId, examSessionId: metadata.examSessionId, examPosition: metadata.examPosition, maxPoints: metadata.maxPoints,
+			historyScope: metadata.historyScope
 		}).where(eq(taskVersions.id, id));
 		await transaction.delete(taskVersionTopics).where(eq(taskVersionTopics.taskVersionId, id));
 		await transaction.delete(sources).where(eq(sources.taskVersionId, id));
@@ -180,7 +191,7 @@ export async function createDraftRevision(actor: Actor, sourceVersionId: number)
 		const [draft] = await transaction.insert(taskVersions).values({
 			taskId: sourceVersion.taskId, version: (latest?.version ?? 0) + 1, status: 'draft',
 			title: sourceVersion.title, instructions: sourceVersion.instructions,
-			curriculumId: sourceVersion.curriculumId, periodId: sourceVersion.periodId,
+			curriculumId: sourceVersion.curriculumId, periodId: sourceVersion.periodId, historyScope: sourceVersion.historyScope,
 			examSessionId: sourceVersion.examSessionId, examPosition: sourceVersion.examPosition, maxPoints: sourceVersion.maxPoints,
 			createdBy: actor.userId
 		}).returning({ id: taskVersions.id });
@@ -288,24 +299,27 @@ export async function deleteAssetRecord(actor: Actor, id: number) {
 	return asset;
 }
 
-export async function listPublishedTasks(filters: { query?: string; curriculumId?: number; periodId?: number; topicId?: number; year?: number; session?: 'spring' | 'autumn' }) {
+export async function listPublishedTasks(filters: { query?: string; curriculumId?: number; periodId?: number; topicId?: number; year?: number; session?: 'spring' | 'autumn'; origin?: 'official' | 'ujkor'; historyScope?: 'hungarian' | 'global' }) {
 	const db = getDb();
 	const conditions = [eq(tasks.status, 'published'), eq(taskVersions.status, 'published')];
 	if (filters.query) conditions.push(ilike(taskVersions.title, `%${filters.query}%`));
 	if (filters.curriculumId) conditions.push(eq(taskVersions.curriculumId, filters.curriculumId));
+	if (filters.origin) conditions.push(eq(tasks.origin, filters.origin));
+	if (filters.historyScope) conditions.push(eq(taskVersions.historyScope, filters.historyScope));
 	if (filters.periodId) conditions.push(eq(taskVersions.periodId, filters.periodId));
 	if (filters.year) conditions.push(eq(examSessions.year, filters.year));
 	if (filters.session) conditions.push(eq(examSessions.session, filters.session));
 
 	let query = db.select({
 		slug: tasks.slug, title: taskVersions.title, maxPoints: taskVersions.maxPoints,
+		origin: tasks.origin, historyScope: taskVersions.historyScope,
 		curriculum: curricula.name, period: historicalPeriods.name, year: examSessions.year,
 		session: examSessions.session, versionId: taskVersions.id
 	}).from(taskVersions)
 		.innerJoin(tasks, eq(tasks.id, taskVersions.taskId))
-		.innerJoin(curricula, eq(curricula.id, taskVersions.curriculumId))
+		.leftJoin(curricula, eq(curricula.id, taskVersions.curriculumId))
 		.innerJoin(historicalPeriods, eq(historicalPeriods.id, taskVersions.periodId))
-		.innerJoin(examSessions, eq(examSessions.id, taskVersions.examSessionId));
+		.leftJoin(examSessions, eq(examSessions.id, taskVersions.examSessionId));
 	if (filters.topicId) {
 		query = query.innerJoin(taskVersionTopics, and(eq(taskVersionTopics.taskVersionId, taskVersions.id), eq(taskVersionTopics.topicId, filters.topicId))) as typeof query;
 	}
@@ -323,13 +337,14 @@ export async function getPublishedTask(slug: string) {
 	const db = getDb();
 	const [task] = await db.select({
 		versionId: taskVersions.id, slug: tasks.slug, title: taskVersions.title, instructions: taskVersions.instructions,
+		origin: tasks.origin, historyScope: taskVersions.historyScope,
 		maxPoints: taskVersions.maxPoints, curriculum: curricula.name, period: historicalPeriods.name,
 		year: examSessions.year, session: examSessions.session
 	}).from(taskVersions)
 		.innerJoin(tasks, and(eq(tasks.id, taskVersions.taskId), eq(tasks.status, 'published')))
-		.innerJoin(curricula, eq(curricula.id, taskVersions.curriculumId))
+		.leftJoin(curricula, eq(curricula.id, taskVersions.curriculumId))
 		.innerJoin(historicalPeriods, eq(historicalPeriods.id, taskVersions.periodId))
-		.innerJoin(examSessions, eq(examSessions.id, taskVersions.examSessionId))
+		.leftJoin(examSessions, eq(examSessions.id, taskVersions.examSessionId))
 		.where(and(eq(tasks.slug, slug), eq(taskVersions.status, 'published')));
 	if (!task) return null;
 	const sourceRows = await db.select({ id: sources.id, taskVersionId: sources.taskVersionId, position: sources.position, kind: sources.kind, title: sources.title, content: sources.content, assetId: sources.assetId, createdAt: sources.createdAt, updatedAt: sources.updatedAt, assetPath: assets.path, assetMimeType: assets.mimeType, assetAltText: assets.altText })

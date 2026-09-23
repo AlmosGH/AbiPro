@@ -12,7 +12,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	requireAdmin(locals);
 	const statusValue = url.searchParams.get('status');
 	const status: 'draft' | 'published' | 'archived' | undefined = statusValue === 'draft' || statusValue === 'published' || statusValue === 'archived' ? statusValue : undefined;
-	const filters = { query: url.searchParams.get('q')?.trim() || undefined, status, curriculumId: optionalId(url.searchParams.get('curriculumId')), periodId: optionalId(url.searchParams.get('periodId')), topicId: optionalId(url.searchParams.get('topicId')), year: optionalId(url.searchParams.get('year')) };
+	const originValue = url.searchParams.get('origin');
+	const scopeValue = url.searchParams.get('historyScope');
+	const origin: 'official' | 'ujkor' | undefined = originValue === 'official' || originValue === 'ujkor' ? originValue : undefined;
+	const historyScope: 'hungarian' | 'global' | undefined = scopeValue === 'hungarian' || scopeValue === 'global' ? scopeValue : undefined;
+	const filters = { query: url.searchParams.get('q')?.trim() || undefined, status, origin, historyScope,
+		curriculumId: optionalId(url.searchParams.get('curriculumId')), periodId: optionalId(url.searchParams.get('periodId')), topicId: optionalId(url.searchParams.get('topicId')), year: optionalId(url.searchParams.get('year')) };
 	const references = await getReferenceData();
 	const taskVersions = await listFilteredAdminTasks(filters);
 	return { ...references, taskVersions, filters };

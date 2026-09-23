@@ -1,4 +1,6 @@
 import postgres from 'postgres';
+import { periodSlug, topicSlug } from '../src/lib/history-taxonomy.ts';
+import { classifyHistoryTask } from '../src/lib/history-classification.ts';
 
 const connectionString = process.env.DATABASE_MIGRATION_URL ?? process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_MIGRATION_URL or DATABASE_URL is required.');
@@ -180,18 +182,14 @@ try {
 
 		for (const taskData of tasks) {
 			const seedSlug = `${taskData.slug}-mock-exam`;
-			const [periodSlug, periodName, periodPosition] = taskData.period;
-			const [topicSlug, topicName] = taskData.topic;
+			const classification = classifyHistoryTask({ title: taskData.title, oldPeriod: taskData.period[0], oldTopics: [taskData.topic[1]], examPosition: taskData.number });
 			const [period] = await transaction<{ id: number }[]>`
-				insert into app_private.historical_periods (slug, name, position)
-				values (${periodSlug}, ${periodName}, ${periodPosition})
-				on conflict (slug) do update set name = excluded.name, position = excluded.position returning id
+				select id from app_private.historical_periods where slug = ${periodSlug(String(classification.period))}
 			`;
 			const [topic] = await transaction<{ id: number }[]>`
-				insert into app_private.topics (slug, name, period_id)
-				values (${topicSlug}, ${topicName}, ${period.id})
-				on conflict (slug) do update set name = excluded.name, period_id = excluded.period_id returning id
+				select id from app_private.topics where slug = ${topicSlug(classification.topic)}
 			`;
+			if (!period || !topic) throw new Error('Official history taxonomy is not installed.');
 
 			const existing = await transaction<{ id: number; version_id: number | null; version_status: 'draft' | 'published' | 'retired' | null; exam_position: number | null }[]>`
 				select task.id, version.id as version_id, version.status as version_status, version.exam_position
@@ -229,8 +227,8 @@ try {
 				insert into app_private.tasks (slug, status) values (${seedSlug}, 'draft') returning id
 			`;
 			const [version] = await transaction<{ id: number }[]>`
-				insert into app_private.task_versions (task_id, version, status, title, instructions, curriculum_id, period_id, exam_session_id, max_points, exam_position, published_at)
-				values (${task.id}, 1, 'draft', ${taskData.title}, 'Offizielle Kurzantwort-Aufgabe aus der deutschsprachigen Abiturprüfung vom 6. Mai 2026. Als Testdaten importiert.', ${curriculum.id}, ${period.id}, ${session.id}, ${taskData.maxPoints}, ${taskData.number}, null) returning id
+				insert into app_private.task_versions (task_id, version, status, title, instructions, curriculum_id, period_id, exam_session_id, history_scope, max_points, exam_position, published_at)
+				values (${task.id}, 1, 'draft', ${taskData.title}, 'Offizielle Kurzantwort-Aufgabe aus der deutschsprachigen Abiturprüfung vom 6. Mai 2026. Als Testdaten importiert.', ${curriculum.id}, ${period.id}, ${session.id}, ${classification.scope}, ${taskData.maxPoints}, ${taskData.number}, null) returning id
 			`;
 			await transaction`insert into app_private.task_version_topics (task_version_id, topic_id) values (${version.id}, ${topic.id})`;
 

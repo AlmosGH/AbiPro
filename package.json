@@ -24,7 +24,13 @@
 		"exams:prepare": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts prepare"
 		,"exams:generate": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts generate"
 		,"exams:validate": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts validate"
-		,"exams:publish": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts publish"
+		,"exams:publish": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts publish",
+		"ujkor:extract": "python3 scripts/extract-ujkor.py",
+		"ujkor:generate": "node --env-file=.env --experimental-strip-types scripts/ujkor-import.ts generate",
+		"ujkor:validate": "node --env-file=.env --experimental-strip-types scripts/ujkor-import.ts validate",
+		"ujkor:publish": "node --env-file=.env --experimental-strip-types scripts/ujkor-import.ts publish",
+		"history:classify": "node --env-file=.env --experimental-strip-types scripts/generate-history-tags.ts",
+		"history:apply": "node --env-file=.env --experimental-strip-types scripts/apply-history-taxonomy.ts --apply"
 	},
 	"dependencies": {
 		"@supabase/ssr": "0.12.7",

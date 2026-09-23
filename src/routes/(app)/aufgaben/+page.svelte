@@ -13,6 +13,8 @@
 	const currentReturn = $derived(`${page.url.pathname}${page.url.search}`);
 	const activeFilters = $derived([
 		data.filters.query ? { key: 'q', label: `Suche: ${data.filters.query}` } : null,
+		data.filters.origin ? { key: 'origin', label: data.filters.origin === 'ujkor' ? 'Újkor.hu-Sammlung' : 'Offizielle Prüfungen' } : null,
+		data.filters.historyScope ? { key: 'historyScope', label: data.filters.historyScope === 'hungarian' ? 'Ungarische Geschichte' : 'Weltgeschichte' } : null,
 		data.filters.curriculumId ? { key: 'curriculumId', label: data.curricula.find((item) => item.id === data.filters.curriculumId)?.name ?? 'Lehrplan' } : null,
 		data.filters.periodId ? { key: 'periodId', label: data.periods.find((item) => item.id === data.filters.periodId)?.name ?? 'Epoche' } : null,
 		data.filters.topicId ? { key: 'topicId', label: data.topics.find((item) => item.id === data.filters.topicId)?.name ?? 'Thema' } : null,
@@ -45,7 +47,7 @@
 
 <svelte:head><title>Aufgaben – AbiPro</title><meta name="description" content="Veröffentlichte Aufgaben für die deutschsprachige Geschichte-Abiturvorbereitung." /></svelte:head>
 <main>
-	<PageHeader eyebrow="Aufgabenpool" title="Finde deine nächste Aufgabe" description="Suche in echten Prüfungsaufgaben und übe genau das, was dich weiterbringt." />
+	<PageHeader eyebrow="Aufgabenpool" title="Finde deine nächste Aufgabe" description="Suche in offiziellen Prüfungen und der Újkor.hu-Sammlung und übe gezielt nach Thema." />
 	<section class="catalogue-tools" aria-label="Aufgaben durchsuchen und filtern">
 		<div class="primary-tools">
 			<label class="search-field"><span class="sr-only">Aufgaben durchsuchen</span><input type="search" value={searchValue} oninput={(event) => queueSearch(event.currentTarget.value)} placeholder="Titel oder Stichwort suchen …" /></label>
@@ -55,6 +57,8 @@
 			<summary>Weitere Filter <span>{activeFilters.length || ''}</span></summary>
 			<form method="GET" class="filters">
 				<input type="hidden" name="q" value={data.filters.query ?? ''} /><input type="hidden" name="sort" value={data.filters.sort} />
+				<label>Sammlung<select name="origin"><option value="">Alle</option><option value="official" selected={data.filters.origin === 'official'}>Offizielle Prüfungen</option><option value="ujkor" selected={data.filters.origin === 'ujkor'}>Újkor.hu</option></select></label>
+				<label>Geschichte<select name="historyScope"><option value="">Alle</option><option value="hungarian" selected={data.filters.historyScope === 'hungarian'}>Ungarisch</option><option value="global" selected={data.filters.historyScope === 'global'}>Weltgeschichte</option></select></label>
 				<label>Lehrplan<select name="curriculumId"><option value="">Alle</option>{#each data.curricula as item (item.id)}<option value={item.id} selected={data.filters.curriculumId === item.id}>{item.name}</option>{/each}</select></label>
 				<label>Epoche<select name="periodId"><option value="">Alle</option>{#each data.periods as item (item.id)}<option value={item.id} selected={data.filters.periodId === item.id}>{item.name}</option>{/each}</select></label>
 				<label>Thema<select name="topicId"><option value="">Alle</option>{#each data.topics as item (item.id)}<option value={item.id} selected={data.filters.topicId === item.id}>{item.name}</option>{/each}</select></label>
@@ -69,8 +73,9 @@
 	{#if data.tasks.length}
 		<div class="task-grid">{#each data.tasks as task (task.slug)}
 			<article class="task-card">
-				<div class="card-top"><Badge tone={task.practiced ? 'success' : 'neutral'}>{task.practiced ? 'Geübt' : 'Neu'}</Badge><span>{task.year} · {task.session === 'spring' ? 'Frühjahr' : 'Herbst'}</span></div>
+				<div class="card-top"><Badge tone={task.practiced ? 'success' : 'neutral'}>{task.practiced ? 'Geübt' : 'Neu'}</Badge><span>{task.origin === 'ujkor' ? 'Újkor.hu' : `${task.year} · ${task.session === 'spring' ? 'Frühjahr' : 'Herbst'}`}</span></div>
 				<div><p class="period">{task.period}</p><h2>{task.title}</h2></div>
+				<p>{task.historyScope === 'hungarian' ? 'Ungarische Geschichte' : 'Weltgeschichte'}</p>
 				<div class="topics">{#each task.topics.slice(0, 3) as topic (topic)}<span>{topic}</span>{/each}</div>
 				<div class="card-footer"><span><strong>{task.maxPoints}</strong> Punkte</span><Button href={`/aufgaben/${task.slug}?return=${encodeURIComponent(currentReturn)}`}>Aufgabe öffnen</Button></div>
 			</article>

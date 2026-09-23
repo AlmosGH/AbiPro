@@ -43,6 +43,13 @@
       "when": 1789493231444,
       "tag": "0005_profile_query_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790151496838,
+      "tag": "0006_deep_maginty",
+      "breakpoints": true
     }
   ]
 }

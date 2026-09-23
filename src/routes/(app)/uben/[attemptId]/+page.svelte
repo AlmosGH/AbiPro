@@ -174,7 +174,7 @@
 
 <svelte:head><title>{data.attempt.title} – Üben – AbiPro</title></svelte:head>
 <main class="practice-page">
-	<header class="practice-header"><div><a href="/uben">← Übung verlassen</a><h1>{data.attempt.title}</h1><p>{data.attempt.year} · {data.attempt.session === 'spring' ? 'Frühjahr' : 'Herbst'} · {data.attempt.period} · {data.attempt.maxScore} Punkte</p></div>{#if data.attempt.status === 'in_progress'}<div class:save-problem={saveStatus === 'error'} class="save-indicator" aria-live="polite"><i></i>{saveStatus === 'saving' ? 'Wird gespeichert …' : saveStatus === 'error' ? 'Speichern fehlgeschlagen' : saveStatus === 'saved' ? 'Alles gespeichert' : 'Autosave aktiv'}</div>{/if}</header>
+	<header class="practice-header"><div><a href="/uben">← Übung verlassen</a><h1>{data.attempt.title}</h1><p>{data.attempt.origin === 'ujkor' ? 'Újkor.hu-Sammlung' : `${data.attempt.year} · ${data.attempt.session === 'spring' ? 'Frühjahr' : 'Herbst'}`} · {data.attempt.period} · {data.attempt.historyScope === 'hungarian' ? 'Ungarische Geschichte' : 'Weltgeschichte'} · {data.attempt.maxScore} Punkte</p></div>{#if data.attempt.status === 'in_progress'}<div class:save-problem={saveStatus === 'error'} class="save-indicator" aria-live="polite"><i></i>{saveStatus === 'saving' ? 'Wird gespeichert …' : saveStatus === 'error' ? 'Speichern fehlgeschlagen' : saveStatus === 'saved' ? 'Alles gespeichert' : 'Autosave aktiv'}</div>{/if}</header>
 
 	{#if data.attempt.status === 'graded'}
 		<section class="result-summary"><span>Dein Ergebnis</span><strong>{data.attempt.score} / {data.attempt.maxScore}</strong><p>{data.bestAttempt ? `Dein Bestwert: ${data.bestAttempt.score} von ${data.bestAttempt.maxScore} Punkten.` : 'Jeder Versuch macht Muster sichtbar.'}</p></section>

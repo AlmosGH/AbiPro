@@ -2,12 +2,12 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { requireAdmin } from '$lib/server/authorization';
 import { archiveTask, createDraftRevision, getAdminTaskVersion, getReferenceData, listAssetRecords, publishTaskVersion, restoreTask, saveTaskDraft } from '$lib/server/content';
-import { parseJsonField, questionDraftSchema, sourceDraftSchema, taskMetadataSchema } from '$lib/server/content-validation';
+import { editableTaskMetadataSchema, parseJsonField, questionDraftSchema, sourceDraftSchema } from '$lib/server/content-validation';
 import { createAssetSignedUrl } from '$lib/server/storage';
 import type { Actions, PageServerLoad } from './$types';
 
 const idSchema = z.coerce.number().int().positive();
-const editableMetadataSchema = taskMetadataSchema.omit({ slug: true });
+const editableMetadataSchema = editableTaskMetadataSchema;
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	requireAdmin(locals);

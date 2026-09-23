@@ -31,6 +31,8 @@ export const actions: Actions = {
 		const actor = requireActor(locals);
 		const formData = await request.formData();
 		const parsed = z.object({
+			origin: z.preprocess((value) => value === '' ? undefined : value, z.enum(['official', 'ujkor']).optional()),
+			historyScope: z.preprocess((value) => value === '' ? undefined : value, z.enum(['hungarian', 'global']).optional()),
 			curriculumId: optionalId,
 			periodId: optionalId,
 			topicId: optionalId,

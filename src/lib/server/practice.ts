@@ -11,6 +11,8 @@ import type { AnswerPayload } from '$lib/types/questions';
 import { isAiEligibleMiss, processAiGradesForAttempt, queueAiGrade } from '$lib/server/ai-grading.server';
 
 export interface PracticeFilters {
+	origin?: 'official' | 'ujkor';
+	historyScope?: 'hungarian' | 'global';
 	curriculumId?: number;
 	periodId?: number;
 	topicId?: number;
@@ -62,6 +64,8 @@ export async function listResumablePracticeAttempts(userId: string) {
 export async function createPracticeAttempt(userId: string, filters: PracticeFilters) {
 	return getDb().transaction(async (transaction) => {
 		const conditions = [eq(tasks.status, 'published'), eq(taskVersions.status, 'published')];
+		if (filters.origin) conditions.push(eq(tasks.origin, filters.origin));
+		if (filters.historyScope) conditions.push(eq(taskVersions.historyScope, filters.historyScope));
 		if (filters.curriculumId) conditions.push(eq(taskVersions.curriculumId, filters.curriculumId));
 		if (filters.periodId) conditions.push(eq(taskVersions.periodId, filters.periodId));
 		if (filters.taskSlug) conditions.push(eq(tasks.slug, filters.taskSlug));
@@ -98,15 +102,16 @@ export async function getPracticeAttempt(userId: string, attemptId: number) {
 		submittedAt: assessmentAttempts.submittedAt, score: assessmentAttempts.score, maxScore: assessmentAttempts.maxScore,
 		attemptTaskId: attemptTasks.id, taskVersionId: attemptTasks.taskVersionId,
 		slug: tasks.slug, title: taskVersions.title, instructions: taskVersions.instructions,
+		origin: tasks.origin, historyScope: taskVersions.historyScope,
 		curriculum: curricula.name, period: historicalPeriods.name, year: examSessions.year,
 		session: examSessions.session
 	}).from(assessmentAttempts)
 		.innerJoin(attemptTasks, eq(attemptTasks.attemptId, assessmentAttempts.id))
 		.innerJoin(taskVersions, eq(taskVersions.id, attemptTasks.taskVersionId))
 		.innerJoin(tasks, eq(tasks.id, taskVersions.taskId))
-		.innerJoin(curricula, eq(curricula.id, taskVersions.curriculumId))
+		.leftJoin(curricula, eq(curricula.id, taskVersions.curriculumId))
 		.innerJoin(historicalPeriods, eq(historicalPeriods.id, taskVersions.periodId))
-		.innerJoin(examSessions, eq(examSessions.id, taskVersions.examSessionId))
+		.leftJoin(examSessions, eq(examSessions.id, taskVersions.examSessionId))
 		.where(and(eq(assessmentAttempts.id, attemptId), eq(assessmentAttempts.userId, userId), eq(assessmentAttempts.kind, 'practice')));
 	if (!attempt) return null;
 

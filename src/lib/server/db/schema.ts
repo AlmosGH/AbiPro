@@ -21,6 +21,8 @@ export const appPrivate = pgSchema('app_private');
 
 export const appRole = appPrivate.enum('app_role', ['learner', 'admin']);
 export const taskStatus = appPrivate.enum('task_status', ['draft', 'published', 'archived']);
+export const taskOrigin = appPrivate.enum('task_origin', ['official', 'ujkor']);
+export const historyScope = appPrivate.enum('history_scope', ['hungarian', 'global']);
 export const taskVersionStatus = appPrivate.enum('task_version_status', ['draft', 'published', 'retired']);
 export const examSessionKind = appPrivate.enum('exam_session_kind', ['spring', 'autumn']);
 export const sourceKind = appPrivate.enum('source_kind', ['text', 'image', 'table', 'map']);
@@ -83,6 +85,7 @@ export const examSessions = appPrivate.table('exam_sessions', {
 export const tasks = appPrivate.table('tasks', {
 	id: identity(),
 	slug: text('slug').notNull().unique(),
+	origin: taskOrigin('origin').notNull().default('official'),
 	status: taskStatus('status').notNull().default('draft'),
 	createdBy: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),
 	createdAt,
@@ -96,9 +99,10 @@ export const taskVersions = appPrivate.table('task_versions', {
 	status: taskVersionStatus('status').notNull().default('draft'),
 	title: text('title').notNull(),
 	instructions: text('instructions'),
-	curriculumId: bigint('curriculum_id', { mode: 'number' }).notNull().references(() => curricula.id, { onDelete: 'restrict' }),
+	curriculumId: bigint('curriculum_id', { mode: 'number' }).references(() => curricula.id, { onDelete: 'restrict' }),
 	periodId: bigint('period_id', { mode: 'number' }).notNull().references(() => historicalPeriods.id, { onDelete: 'restrict' }),
-	examSessionId: bigint('exam_session_id', { mode: 'number' }).notNull().references(() => examSessions.id, { onDelete: 'restrict' }),
+	examSessionId: bigint('exam_session_id', { mode: 'number' }).references(() => examSessions.id, { onDelete: 'restrict' }),
+	historyScope: historyScope('history_scope').notNull().default('global'),
 	maxPoints: numeric('max_points', { precision: 6, scale: 2, mode: 'number' }).notNull(),
 	examPosition: integer('exam_position'),
 	createdBy: uuid('created_by').references(() => profiles.id, { onDelete: 'set null' }),

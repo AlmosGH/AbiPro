@@ -17,8 +17,14 @@ export const load: PageServerLoad = async ({ url, locals, depends }) => {
 	const query = url.searchParams.get('q')?.trim() || undefined;
 	const sessionValue = url.searchParams.get('session');
 	const session: 'spring' | 'autumn' | undefined = sessionValue === 'spring' || sessionValue === 'autumn' ? sessionValue : undefined;
+	const originValue = url.searchParams.get('origin');
+	const origin: 'official' | 'ujkor' | undefined = originValue === 'official' || originValue === 'ujkor' ? originValue : undefined;
+	const scopeValue = url.searchParams.get('historyScope');
+	const historyScope: 'hungarian' | 'global' | undefined = scopeValue === 'hungarian' || scopeValue === 'global' ? scopeValue : undefined;
 	const filters = {
 		query,
+		origin,
+		historyScope,
 		curriculumId: optionalId(url.searchParams.get('curriculumId')),
 		periodId: optionalId(url.searchParams.get('periodId')),
 		topicId: optionalId(url.searchParams.get('topicId')),
@@ -38,13 +44,13 @@ export const load: PageServerLoad = async ({ url, locals, depends }) => {
 	]), { userId: actor.userId });
 	const topicScores = new Map(progress?.topics.map((topic) => [topic.name, topic.averagePercent ?? 101]) ?? []);
 	const tasks = taskRows.map((task) => ({ ...task, practiced: practiced.has(task.taskVersionId) })).sort((a, b) => {
-		if (sort === 'unpracticed') return Number(a.practiced) - Number(b.practiced) || b.year - a.year;
+		if (sort === 'unpracticed') return Number(a.practiced) - Number(b.practiced) || (b.year ?? 0) - (a.year ?? 0);
 		if (sort === 'weakest') {
 			const aScore = Math.min(...a.topics.map((topic) => topicScores.get(topic) ?? 101), 101);
 			const bScore = Math.min(...b.topics.map((topic) => topicScores.get(topic) ?? 101), 101);
-			return aScore - bScore || b.year - a.year;
+			return aScore - bScore || (b.year ?? 0) - (a.year ?? 0);
 		}
-		return b.year - a.year || a.title.localeCompare(b.title, 'de');
+		return (b.year ?? 0) - (a.year ?? 0) || a.title.localeCompare(b.title, 'de');
 	});
 	const pageSize = 12;
 	const pageCount = Math.max(1, Math.ceil(tasks.length / pageSize));
