@@ -21,10 +21,10 @@
 		"db:studio": "drizzle-kit studio",
 		"db:seed": "node --env-file=.env --experimental-strip-types scripts/seed-milestone-2.ts",
 		"db:seed:exam": "node --env-file=.env --experimental-strip-types scripts/seed-2026-may-german-history.ts",
-		"exams:prepare": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts prepare"
-		,"exams:generate": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts generate"
-		,"exams:validate": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts validate"
-		,"exams:publish": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts publish",
+		"exams:prepare": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts prepare",
+		"exams:generate": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts generate",
+		"exams:validate": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts validate",
+		"exams:publish": "node --env-file=.env --experimental-strip-types scripts/exam-import.ts publish",
 		"ujkor:extract": "python3 scripts/extract-ujkor.py",
 		"ujkor:pages": "python3 scripts/render-ujkor-pages.py",
 		"ujkor:generate": "node --env-file=.env --experimental-strip-types scripts/ujkor-import.ts generate",
@@ -37,6 +37,7 @@
 	"dependencies": {
 		"@supabase/ssr": "0.12.7",
 		"@supabase/supabase-js": "2.116.0",
+		"@vercel/analytics": "^2.0.1",
 		"zod": "4.6.5"
 	},
 	"devDependencies": {
