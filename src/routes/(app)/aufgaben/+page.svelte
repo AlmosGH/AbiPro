@@ -53,7 +53,7 @@
 	<section class="catalogue-tools" aria-label={language.t('Aufgaben durchsuchen und filtern')}>
 		<div class="primary-tools">
 			<label class="search-field"><span class="sr-only">{language.t('Aufgaben durchsuchen')}</span><input type="search" value={searchValue} oninput={(event) => queueSearch(event.currentTarget.value)} placeholder={language.t('Titel oder Stichwort suchen …')} /></label>
-			<label class="sort-field"><span>{language.t('Sortieren')}</span><select value={data.filters.sort} onchange={(event) => goto(urlWith({ sort: event.currentTarget.value }))}><option value="newest">{language.t('Neueste zuerst')}</option><option value="unpracticed">{language.t('Noch nicht geübt')}</option><option value="weakest">{language.t('Schwächstes Thema')}</option><option value="year">{language.t('Prüfungsjahr')}</option></select></label>
+			<label class="sort-field"><span>{language.t('Sortieren')}</span><select value={data.filters.sort} onchange={(event) => goto(urlWith({ sort: event.currentTarget.value }))}><option value="newest">{language.t('Neueste zuerst')}</option>{#if data.signedIn}<option value="unpracticed">{language.t('Noch nicht geübt')}</option><option value="weakest">{language.t('Schwächstes Thema')}</option>{/if}<option value="year">{language.t('Prüfungsjahr')}</option></select></label>
 		</div>
 		<details class="filter-drawer">
 			<summary>{language.t('Weitere Filter')}{#if activeFilters.length}<span>{activeFilters.length}</span>{/if}</summary>
@@ -75,7 +75,7 @@
 	{#if data.tasks.length}
 		<div class="task-grid">{#each data.tasks as task (task.slug)}
 			<article class="task-card">
-				<div class="card-top"><Badge tone={task.practiced ? 'success' : 'neutral'}>{language.t(task.practiced ? 'Geübt' : 'Neu')}</Badge><span>{task.origin === 'ujkor' ? 'Újkor.hu' : `${task.year} · ${language.t(task.session === 'spring' ? 'Frühjahr' : 'Herbst')}`}</span></div>
+				<div class="card-top">{#if data.signedIn}<Badge tone={task.practiced ? 'success' : 'neutral'}>{language.t(task.practiced ? 'Geübt' : 'Neu')}</Badge>{/if}<span>{task.origin === 'ujkor' ? 'Újkor.hu' : `${task.year} · ${language.t(task.session === 'spring' ? 'Frühjahr' : 'Herbst')}`}</span></div>
 				<div><p class="period">{task.period}</p><h2>{task.title}</h2></div>
 				<p>{language.t(task.historyScope === 'hungarian' ? 'Ungarische Geschichte' : 'Weltgeschichte')}</p>
 				<div class="topics">{#each task.topics.slice(0, 3) as topic (topic)}<span>{topic}</span>{/each}</div>

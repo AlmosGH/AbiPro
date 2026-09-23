@@ -9,7 +9,7 @@
 	import type { PageProps } from './$types';
 	let { data, form }: PageProps = $props();
 	const language = getLanguageContext();
-	function initialDisplayName() { return data.profile.displayName ?? ''; }
+	function initialDisplayName() { return data.profile?.displayName ?? ''; }
 	let displayName = $state(initialDisplayName());
 	let savingName = $state(false);
 

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { getReferenceData, listPublishedTasks } from '$lib/server/content';
 import type { PageServerLoad } from './$types';
-import { requireActor } from '$lib/server/authorization';
 import { getPracticedTaskVersionIds, getProfileProgress } from '$lib/server/profile-progress';
 import { timeQuery } from '$lib/server/query-timing';
 
@@ -13,7 +12,7 @@ function optionalId(value: string | null) {
 
 export const load: PageServerLoad = async ({ url, locals, depends }) => {
 	depends('app:tasks');
-	const actor = requireActor(locals);
+	const userId = locals.profile ? locals.userId : null;
 	const query = url.searchParams.get('q')?.trim() || undefined;
 	const sessionValue = url.searchParams.get('session');
 	const session: 'spring' | 'autumn' | undefined = sessionValue === 'spring' || sessionValue === 'autumn' ? sessionValue : undefined;
@@ -32,16 +31,17 @@ export const load: PageServerLoad = async ({ url, locals, depends }) => {
 		session
 	};
 	const sortValue = url.searchParams.get('sort');
-	const sort = sortValue === 'unpracticed' || sortValue === 'weakest' || sortValue === 'year'
+	const requestedSort = sortValue === 'unpracticed' || sortValue === 'weakest' || sortValue === 'year'
 		? sortValue
 		: 'newest';
+	const sort = userId || (requestedSort !== 'unpracticed' && requestedSort !== 'weakest') ? requestedSort : 'newest';
 	const page = optionalId(url.searchParams.get('page')) ?? 1;
 	const [taskRows, references, practiced, progress] = await timeQuery('task_browsing', () => Promise.all([
 		listPublishedTasks(filters),
 		getReferenceData(),
-		getPracticedTaskVersionIds(actor.userId),
-		sort === 'weakest' ? getProfileProgress(actor.userId) : Promise.resolve(null)
-	]), { userId: actor.userId });
+		userId ? getPracticedTaskVersionIds(userId) : Promise.resolve(new Set<number>()),
+		userId && sort === 'weakest' ? getProfileProgress(userId) : Promise.resolve(null)
+	]), { userId: userId ?? undefined });
 	const topicScores = new Map(progress?.topics.map((topic) => [topic.name, topic.averagePercent ?? 101]) ?? []);
 	const tasks = taskRows.map((task) => ({ ...task, practiced: practiced.has(task.taskVersionId) })).sort((a, b) => {
 		if (sort === 'unpracticed') return Number(a.practiced) - Number(b.practiced) || (b.year ?? 0) - (a.year ?? 0);
@@ -56,6 +56,7 @@ export const load: PageServerLoad = async ({ url, locals, depends }) => {
 	const pageCount = Math.max(1, Math.ceil(tasks.length / pageSize));
 	const currentPage = Math.min(page, pageCount);
 	return {
+		signedIn: Boolean(userId),
 		tasks: tasks.slice(0, currentPage * pageSize),
 		total: tasks.length,
 		page: currentPage,

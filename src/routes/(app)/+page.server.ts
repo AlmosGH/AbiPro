@@ -7,13 +7,16 @@ import { enforceRateLimit } from '$lib/server/rate-limit';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
+	if (!locals.userId || !locals.profile) {
+		return { dashboard: null };
+	}
 	const actor = requireActor(locals);
 	const [progress, practiceAttempts, activeExam, examPool] = await Promise.all([
 		getProfileProgress(actor.userId), listResumablePracticeAttempts(actor.userId), getActiveMockExam(actor.userId), getMockExamReadiness()
 	]);
 	const weakestTopic = [...progress.topics].filter((topic) => topic.averagePercent !== null).sort((a, b) => (a.averagePercent ?? 101) - (b.averagePercent ?? 101))[0] ?? null;
 	const readinessScore = Math.round(Math.min(100, (progress.overview.averagePercent ?? 0) * 0.8 + Math.min(20, (progress.overview.practiceCompleted + progress.overview.mockExamsCompleted * 2) * 2)));
-	return { progress, activePractice: practiceAttempts[0] ?? null, activeExam, examPool, weakestTopic, readinessScore };
+	return { dashboard: { progress, activePractice: practiceAttempts[0] ?? null, activeExam, examPool, weakestTopic, readinessScore } };
 };
 
 export const actions: Actions = {

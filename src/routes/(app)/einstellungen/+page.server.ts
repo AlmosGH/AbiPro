@@ -7,7 +7,12 @@ import { z } from 'zod';
 import { requireActor } from '$lib/server/authorization';
 import { getDb } from '$lib/server/db';
 import { profiles } from '$lib/server/db/schema';
-import type { Actions } from './$types';
+import type { Actions, PageServerLoad } from './$types';
+
+export const load: PageServerLoad = ({ locals, url }) => {
+	requireActor(locals, `/login?next=${encodeURIComponent(url.pathname)}`);
+	return {};
+};
 
 export const actions: Actions = {
 	updateName: async ({ locals, request }) => {

@@ -8,7 +8,7 @@
 
 	let { data, children }: LayoutProps = $props();
 	const language = getLanguageContext();
-	const initials = $derived((data.profile.displayName ?? 'AK').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase());
+	const initials = $derived((data.profile?.displayName ?? 'AK').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase());
 	const path = $derived(page.url.pathname);
 	const pageTitle = $derived(language.t(path === '/' ? 'Übersicht' : path.startsWith('/aufgaben') ? 'Aufgaben' : path.startsWith('/uben') ? 'Üben' : path.startsWith('/prufung') ? 'Prüfung' : path.startsWith('/profil') ? 'Fortschritt' : path.startsWith('/einstellungen') ? 'Einstellungen' : path.startsWith('/admin') ? 'Verwaltung' : 'AbiPro'));
 	const learnerItems = [
@@ -28,10 +28,10 @@
 				<a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}><Icon name={item.icon} /><span>{language.t(item.label)}</span></a>
 			{/each}
 		</nav>
-		{#if data.profile.role === 'admin'}
+		{#if data.profile?.role === 'admin'}
 			<div class="admin-area"><span>{language.t('Administration')}</span><a href="/admin" aria-current={path.startsWith('/admin') ? 'page' : undefined}><Icon name="admin" /><b>{language.t('Verwaltung')}</b></a></div>
 		{/if}
-		<a class="settings-link" href="/einstellungen" aria-current={path.startsWith('/einstellungen') ? 'page' : undefined}><Icon name="settings" /><span>{language.t('Einstellungen')}</span></a>
+		{#if data.profile}<a class="settings-link" href="/einstellungen" aria-current={path.startsWith('/einstellungen') ? 'page' : undefined}><Icon name="settings" /><span>{language.t('Einstellungen')}</span></a>{/if}
 	</aside>
 
 	<div class="workspace">
@@ -39,20 +39,31 @@
 			<div><span class="mobile-mark"><BrandMark size="small" /></span><div><small>AbiPro</small><strong>{pageTitle}</strong></div></div>
 			<div class="top-actions">
 				<LanguagePicker />
+				{#if data.profile}
 				<span class="sync"><i></i><span>{language.t('Alles synchronisiert')}</span></span>
 				<details class="profile-menu">
 					<summary aria-label={language.t('Profilmenü öffnen')}><span class="avatar">{initials}</span><span class="profile-name">{data.profile.displayName ?? language.t('Lernprofil')}</span><Icon name="chevron" size={16} /></summary>
 					<div><a href="/einstellungen"><Icon name="settings" size={18} />{language.t('Einstellungen')}</a><form method="POST" action="/logout"><button type="submit">{language.t('Abmelden')}</button></form></div>
 				</details>
+				{:else}
+				<a class="sign-in-link" href="/login">{language.t('Anmelden')}</a>
+				<a class="sign-up-link" href="/register">{language.t('Kostenlos registrieren')}</a>
+				{/if}
 			</div>
 		</header>
 		<div class="content">{@render children()}</div>
 	</div>
 
-	<nav class="bottom-nav" aria-label={language.t('Mobile Hauptnavigation')} data-sveltekit-preload-data="false" data-sveltekit-preload-code="viewport">
-		{#each learnerItems as item (item.href)}
-			<a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}><Icon name={item.icon} /><span>{language.t(item.label)}</span></a>
-		{/each}
+	<nav class="bottom-nav" class:guest={!data.profile} aria-label={language.t('Mobile Hauptnavigation')} data-sveltekit-preload-data="false" data-sveltekit-preload-code="viewport">
+		{#if data.profile}
+			{#each learnerItems as item (item.href)}
+				<a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}><Icon name={item.icon} /><span>{language.t(item.label)}</span></a>
+			{/each}
+		{:else}
+			<a href="/" aria-current={path === '/' ? 'page' : undefined}><Icon name="home" /><span>{language.t('Übersicht')}</span></a>
+			<a href="/aufgaben" aria-current={path.startsWith('/aufgaben') ? 'page' : undefined}><Icon name="tasks" /><span>{language.t('Aufgaben')}</span></a>
+			<a href="/login"><Icon name="user" /><span>{language.t('Anmelden')}</span></a>
+		{/if}
 	</nav>
 </div>
 
@@ -86,6 +97,9 @@
 	.profile-menu form { display: block; }
 	.profile-menu button { width: 100%; justify-content: flex-start; }
 	.profile-menu > div a:hover, .profile-menu button:hover { background: var(--color-surface-soft); }
+	.sign-in-link, .sign-up-link { font-size: .82rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+	.sign-up-link { padding: .55rem .8rem; border-radius: var(--radius-md); background: var(--color-brand); color: white; }
+	.sign-up-link:hover { background: var(--color-brand-strong); color: white; }
 	.bottom-nav { display: none; }
 	:global(.content > main) { max-width: 76rem; }
 	@media (max-width: 59.99rem) {
@@ -101,7 +115,9 @@
 		.topbar { min-height: 3.75rem; padding: 0 var(--space-3); }
 		.mobile-mark { display: block; }
 		.topbar small, .sync span, .profile-name, .profile-menu summary :global(svg) { display: none; }
+		.sign-up-link { display: none; }
 		.bottom-nav { position: fixed; z-index: 30; inset: auto 0 0; display: grid; grid-template-columns: repeat(4, 1fr); padding: .35rem .35rem max(.35rem, env(safe-area-inset-bottom)); border-top: 1px solid var(--color-border); background: rgb(255 255 255 / .97); box-shadow: 0 -8px 24px rgb(23 55 43 / .08); }
+		.bottom-nav.guest { grid-template-columns: repeat(3, 1fr); }
 		.bottom-nav a { display: flex; min-height: 3.5rem; flex-direction: column; align-items: center; justify-content: center; gap: .2rem; border-radius: var(--radius-md); color: var(--color-muted); font-size: .67rem; font-weight: 700; text-decoration: none; }
 		.bottom-nav a[aria-current='page'] { background: var(--color-brand-soft); color: var(--color-brand-strong); }
 	}

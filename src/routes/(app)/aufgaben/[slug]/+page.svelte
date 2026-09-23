@@ -35,7 +35,7 @@
 				<div class="topic-list"><span>{language.t('Themen: ').trim()}</span>{#each data.task.topics as topic (topic)}<Badge>{topic}</Badge>{/each}</div>
 			{/if}
 			<div class="task-actions">
-				<Button href={`/uben?task=${data.task.slug}`}>{language.t('Diese Aufgabe üben')} <span aria-hidden="true">→</span></Button>
+				<Button href={`/uben?task=${data.task.slug}`}>{language.t(data.profile ? 'Diese Aufgabe üben' : 'Zum Üben anmelden')} <span aria-hidden="true">→</span></Button>
 			</div>
 		</div>
 	</header>
