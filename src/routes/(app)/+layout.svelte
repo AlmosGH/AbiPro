@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import Icon from '$lib/components/ui/Icon.svelte';
+	import BrandMark from '$lib/components/ui/BrandMark.svelte';
 	import LanguagePicker from '$lib/components/LanguagePicker.svelte';
 	import { getLanguageContext } from '$lib/i18n';
 	import type { LayoutProps } from './$types';
@@ -20,7 +21,7 @@
 
 <div class="app-shell">
 	<aside class="sidebar">
-		<a class="brand" href="/" aria-label={language.t('AbiPro Übersicht')}><span aria-hidden="true">A</span><strong>AbiPro</strong></a>
+		<a class="brand" href="/" aria-label={language.t('AbiPro Übersicht')}><BrandMark /><strong>AbiPro</strong></a>
 		<nav aria-label={language.t('Hauptnavigation')} data-sveltekit-preload-data="false" data-sveltekit-preload-code="viewport">
 			<a href="/" aria-current={path === '/' ? 'page' : undefined}><Icon name="home" /><span>{language.t('Übersicht')}</span></a>
 			{#each learnerItems as item (item.href)}
@@ -35,7 +36,7 @@
 
 	<div class="workspace">
 		<header class="topbar">
-			<div><span class="mobile-mark">A</span><div><small>AbiPro</small><strong>{pageTitle}</strong></div></div>
+			<div><span class="mobile-mark"><BrandMark size="small" /></span><div><small>AbiPro</small><strong>{pageTitle}</strong></div></div>
 			<div class="top-actions">
 				<LanguagePicker />
 				<span class="sync"><i></i><span>{language.t('Alles synchronisiert')}</span></span>
@@ -59,7 +60,7 @@
 	.app-shell { min-height: 100vh; }
 	.sidebar { position: fixed; z-index: 20; inset: 0 auto 0 0; display: flex; width: var(--sidebar-width); flex-direction: column; padding: var(--space-5) var(--space-3); border-right: 1px solid #284239; background: #122b23; color: white; }
 	.brand { display: flex; min-height: 3rem; align-items: center; gap: var(--space-3); padding: 0 var(--space-3); color: white; text-decoration: none; font-size: 1.15rem; }
-	.brand > span, .mobile-mark { display: grid; width: 2rem; height: 2rem; place-items: center; border-radius: .55rem; background: #f5a35f; color: #42200b; font-family: var(--font-display); font-weight: 700; }
+	.mobile-mark { display: none; }
 	.sidebar nav { display: grid; gap: var(--space-1); margin-top: var(--space-8); }
 	.sidebar a:not(.brand) { display: flex; min-height: 2.75rem; align-items: center; gap: var(--space-3); padding: .65rem .8rem; border-radius: var(--radius-md); color: #c8d7d1; font-size: .9rem; font-weight: 600; text-decoration: none; }
 	.sidebar a:not(.brand):hover { background: rgb(255 255 255 / .07); color: white; }
@@ -73,7 +74,6 @@
 	.topbar > div, .top-actions, .profile-menu summary { display: flex; align-items: center; gap: var(--space-3); }
 	.topbar small { display: block; color: var(--color-muted); font-size: .7rem; }
 	.topbar strong { display: block; font-size: .95rem; }
-	.mobile-mark { display: none; }
 	.sync { display: flex; align-items: center; gap: var(--space-2); color: var(--color-muted); font-size: .78rem; }
 	.sync i { width: .45rem; height: .45rem; border-radius: 50%; background: #24936c; box-shadow: 0 0 0 3px var(--color-brand-soft); }
 	.profile-menu { position: relative; padding: 0; border: 0; background: transparent; }
@@ -99,7 +99,7 @@
 		.sidebar { display: none; }
 		.workspace { margin-left: 0; }
 		.topbar { min-height: 3.75rem; padding: 0 var(--space-3); }
-		.mobile-mark { display: grid; }
+		.mobile-mark { display: block; }
 		.topbar small, .sync span, .profile-name, .profile-menu summary :global(svg) { display: none; }
 		.bottom-nav { position: fixed; z-index: 30; inset: auto 0 0; display: grid; grid-template-columns: repeat(4, 1fr); padding: .35rem .35rem max(.35rem, env(safe-area-inset-bottom)); border-top: 1px solid var(--color-border); background: rgb(255 255 255 / .97); box-shadow: 0 -8px 24px rgb(23 55 43 / .08); }
 		.bottom-nav a { display: flex; min-height: 3.5rem; flex-direction: column; align-items: center; justify-content: center; gap: .2rem; border-radius: var(--radius-md); color: var(--color-muted); font-size: .67rem; font-weight: 700; text-decoration: none; }
