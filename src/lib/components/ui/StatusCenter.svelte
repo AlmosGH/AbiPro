@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { appStatuses, announceStatus, dismissStatus } from '$lib/client/status';
+	import { getLanguageContext } from '$lib/i18n';
 
+	const language = getLanguageContext();
 	let online = $state(true);
 
 	onMount(() => {
@@ -11,11 +13,11 @@
 			online = true;
 			if (offlineStatusId) dismissStatus(offlineStatusId);
 			offlineStatusId = undefined;
-			announceStatus('Verbindung wiederhergestellt. Ausstehende Änderungen werden gespeichert.', 'success');
+			announceStatus(language.t('Verbindung wiederhergestellt. Ausstehende Änderungen werden gespeichert.'), 'success');
 		};
 		const handleOffline = () => {
 			online = false;
-			if (!offlineStatusId) offlineStatusId = announceStatus('Du bist offline. Änderungen bleiben lokal erhalten.', 'warning', 0);
+			if (!offlineStatusId) offlineStatusId = announceStatus(language.t('Du bist offline. Änderungen bleiben lokal erhalten.'), 'warning', 0);
 		};
 		window.addEventListener('online', handleOnline);
 		window.addEventListener('offline', handleOffline);
@@ -27,11 +29,11 @@
 	});
 </script>
 
-{#if !online}<div class="offline" role="status">Offline – Änderungen werden später synchronisiert</div>{/if}
-<section class="status-center" aria-label="Statusmeldungen" aria-live="polite">
+{#if !online}<div class="offline" role="status">{language.t('Offline – Änderungen werden später synchronisiert')}</div>{/if}
+<section class="status-center" aria-label={language.t('Statusmeldungen')} aria-live="polite">
 	{#each $appStatuses as item (item.id)}
 		<div class:danger={item.tone === 'danger'} class:warning={item.tone === 'warning'} class:success={item.tone === 'success'} role={item.tone === 'danger' ? 'alert' : 'status'}>
-			<span>{item.message}</span><button type="button" aria-label="Meldung schließen" onclick={() => dismissStatus(item.id)}>×</button>
+			<span>{item.message}</span><button type="button" aria-label={language.t('Meldung schließen')} onclick={() => dismissStatus(item.id)}>×</button>
 		</div>
 	{/each}
 </section>

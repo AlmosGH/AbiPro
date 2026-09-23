@@ -7,12 +7,14 @@
 	import { announceStatus } from '$lib/client/status';
 	import PracticeAnswerInput from '$lib/components/questions/PracticeAnswerInput.svelte';
 	import SourceList from '$lib/components/task/SourceList.svelte';
+	import { getLanguageContext } from '$lib/i18n';
 	import type { AnswerPayload } from '$lib/types/questions';
 	import type { LearnerQuestion } from '$lib/types/tasks';
 	import type { SaveState } from '$lib/types/practice';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+	const language = getLanguageContext();
 	function initialAnswers() {
 		return Object.fromEntries(data.attempt.tasks.flatMap((task) => task.questions.map((question) => {
 			const saved = task.answers.find((answer) => answer.questionId === question.id)?.response;
@@ -55,7 +57,7 @@
 	const unansweredCount = $derived(totalQuestions - answeredQuestionIds.size);
 	const currentTask = $derived(data.attempt.tasks[currentTaskIndex]);
 	const remainingLabel = $derived(formatRemaining(remainingMilliseconds));
-	const timerAnnouncement = $derived(remainingMilliseconds <= 0 ? 'Die Bearbeitungszeit ist abgelaufen.' : `Noch ${Math.ceil(remainingMilliseconds / 60_000)} Minuten Bearbeitungszeit.`);
+	const timerAnnouncement = $derived(remainingMilliseconds <= 0 ? language.t('Die Bearbeitungszeit ist abgelaufen.') : language.t('Noch {count} Minuten Bearbeitungszeit.', { count: Math.ceil(remainingMilliseconds / 60_000) }));
 	const gradingPending = $derived(data.attempt.tasks.some((task) => task.results.some((result) => result.status === 'pending' || result.status === 'processing')));
 
 	export const snapshot = {
@@ -64,7 +66,7 @@
 			answers = value.answers;
 			currentTaskIndex = value.currentTaskIndex;
 			reviewing = value.reviewing;
-			announceStatus('Deine unvollständige Prüfung wurde wiederhergestellt.', 'info');
+			announceStatus(language.t('Deine unvollständige Prüfung wurde wiederhergestellt.'), 'info');
 		}
 	};
 
@@ -96,10 +98,10 @@
 		if (channel) {
 			channel.onmessage = (event) => {
 				if (event.data?.type === 'open' && event.data?.tabId !== tabId) {
-					announceStatus('Diese Prüfung ist auch in einem anderen Tab geöffnet. Bearbeite sie nur in einem Tab.', 'warning', 0);
+					announceStatus(language.t('Diese Prüfung ist auch in einem anderen Tab geöffnet. Bearbeite sie nur in einem Tab.'), 'warning', 0);
 					channel.postMessage({ type: 'present', tabId });
 				} else if (event.data?.type === 'present' && event.data?.tabId !== tabId) {
-					announceStatus('Diese Prüfung ist auch in einem anderen Tab geöffnet.', 'warning', 0);
+					announceStatus(language.t('Diese Prüfung ist auch in einem anderen Tab geöffnet.'), 'warning', 0);
 				}
 			};
 			channel.postMessage({ type: 'open', tabId });
@@ -219,7 +221,7 @@
 			}
 			await invalidate(`attempt:exam:${data.attempt.id}`);
 			await applyAction(result);
-			announceStatus('Prüfung abgegeben.', 'success');
+			announceStatus(language.t('Prüfung abgegeben.'), 'success');
 		} catch (cause) {
 			finalizationError = cause instanceof Error ? cause.message : 'Die Prüfung konnte nicht abgeschlossen werden.';
 			finalizing = false;
@@ -255,81 +257,81 @@
 			await update({ reset: false, invalidateAll: false });
 			if (result.type === 'success') {
 				await invalidate(`attempt:exam:${data.attempt.id}`);
-				announceStatus('Selbstbewertung gespeichert.', 'success');
+				announceStatus(language.t('Selbstbewertung gespeichert.'), 'success');
 			} else {
 				delete selfGradeOverrides[answerId];
-				announceStatus('Selbstbewertung konnte nicht gespeichert werden.', 'danger');
+				announceStatus(language.t('Selbstbewertung konnte nicht gespeichert werden.'), 'danger');
 			}
 		};
 	};
 </script>
 
-<svelte:head><title>Prüfung – AbiPro</title></svelte:head>
+<svelte:head><title>{language.t('Prüfung')} – AbiPro</title></svelte:head>
 <main class="exam-page">
 	<div class="exam-header">
 		<div>
-			<p><a href="/prufung">Zur Prüfungsübersicht</a></p>
-			<h1>{data.attempt.status === 'in_progress' ? 'Laufende Prüfung' : 'Prüfungsauswertung'}</h1>
+			<p><a href="/prufung">{language.t('Zur Prüfungsübersicht')}</a></p>
+			<h1>{language.t(data.attempt.status === 'in_progress' ? 'Laufende Prüfung' : 'Prüfungsauswertung')}</h1>
 		</div>
 		{#if data.attempt.status === 'in_progress'}
-			<p class:timer-critical={remainingMilliseconds < 5 * 60 * 1000} class="exam-timer"><span>Verbleibende Zeit</span><strong>{remainingLabel}</strong></p><p class="sr-only" aria-live="polite">{timerAnnouncement}</p>
+			<p class:timer-critical={remainingMilliseconds < 5 * 60 * 1000} class="exam-timer"><span>{language.t('Verbleibende Zeit')}</span><strong>{remainingLabel}</strong></p><p class="sr-only" aria-live="polite">{timerAnnouncement}</p>
 		{:else}
-			<p class="exam-score"><span>Ergebnis</span><strong>{data.attempt.status === 'graded' ? `${data.attempt.score} / ${data.attempt.maxScore}` : 'Bewertung ausstehend'}</strong></p>
+			<p class="exam-score"><span>{language.t('Ergebnis')}</span><strong>{data.attempt.status === 'graded' ? `${data.attempt.score} / ${data.attempt.maxScore}` : language.t('Bewertung ausstehend')}</strong></p>
 		{/if}
 	</div>
 
-	{#if clientExpired && data.attempt.status === 'in_progress'}<p role="status" class="readiness-message">Die Bearbeitungszeit ist abgelaufen. Deine Prüfung wird abgeschlossen …</p>{/if}
-	{#if gradingPending}<p role="status" class="readiness-message">Die KI-Bewertung läuft. Der Status wird automatisch mit wachsendem Abstand geprüft …</p>{/if}
-	{#if data.attempt.status === 'in_progress' && remainingMilliseconds <= 5 * 60 * 1000 && remainingMilliseconds > 60 * 1000}<div class="time-warning" role="status"><strong>Noch 5 Minuten</strong><span>Prüfe offene Aufgaben und plane Zeit für die Abgabe ein.</span></div>{/if}
-	{#if data.attempt.status === 'in_progress' && remainingMilliseconds <= 60 * 1000 && remainingMilliseconds > 0}<div class="time-warning critical" role="alert"><strong>Letzte Minute</strong><span>Deine Prüfung wird bei Ablauf automatisch abgegeben.</span></div>{/if}
+	{#if clientExpired && data.attempt.status === 'in_progress'}<p role="status" class="readiness-message">{language.t('Die Bearbeitungszeit ist abgelaufen. Deine Prüfung wird abgeschlossen …')}</p>{/if}
+	{#if gradingPending}<p role="status" class="readiness-message">{language.t('Die KI-Bewertung läuft. Der Status wird automatisch mit wachsendem Abstand geprüft …')}</p>{/if}
+	{#if data.attempt.status === 'in_progress' && remainingMilliseconds <= 5 * 60 * 1000 && remainingMilliseconds > 60 * 1000}<div class="time-warning" role="status"><strong>{language.t('Noch 5 Minuten')}</strong><span>{language.t('Prüfe offene Aufgaben und plane Zeit für die Abgabe ein.')}</span></div>{/if}
+	{#if data.attempt.status === 'in_progress' && remainingMilliseconds <= 60 * 1000 && remainingMilliseconds > 0}<div class="time-warning critical" role="alert"><strong>{language.t('Letzte Minute')}</strong><span>{language.t('Deine Prüfung wird bei Ablauf automatisch abgegeben.')}</span></div>{/if}
 	{#if form?.message}<p role="alert" class="save-error">{form.message}</p>{/if}
-	{#if finalizationError}<p role="alert" class="save-error">{finalizationError}</p>{/if}
+	{#if finalizationError}<p role="alert" class="save-error">{language.t(finalizationError)}</p>{/if}
 
-	<nav class="task-navigation" aria-label="Prüfungsaufgaben">
+	<nav class="task-navigation" aria-label={language.t('Prüfungsaufgaben')}>
 		{#each data.attempt.tasks as task, index (task.attemptTaskId)}
 			<button type="button" class:current={index === currentTaskIndex} class:complete={taskIsComplete(index)} onclick={() => currentTaskIndex = index} aria-current={index === currentTaskIndex ? 'step' : undefined}>
-				<span>{index + 1}</span><small>{taskIsComplete(index) ? 'Beantwortet' : 'Offen'}</small>
+				<span>{index + 1}</span><small>{language.t(taskIsComplete(index) ? 'Beantwortet' : 'Offen')}</small>
 			</button>
 		{/each}
 	</nav>
 
 	{#if reviewing && data.attempt.status === 'in_progress'}
-		<section class="review-screen"><span>Vor der Abgabe</span><h2>Antworten überprüfen</h2><p>{unansweredCount ? `Noch ${unansweredCount} ${unansweredCount === 1 ? 'Frage ist' : 'Fragen sind'} unbeantwortet.` : 'Alle Fragen sind beantwortet.'}</p><div class="review-list">{#each data.attempt.tasks as task, taskIndex (task.attemptTaskId)}<button type="button" onclick={() => goToQuestion(taskIndex)}><span>Aufgabe {taskIndex + 1}</span><strong>{task.questions.filter((question) => answeredQuestionIds.has(question.id)).length} / {task.questions.length} beantwortet</strong></button>{/each}</div><div class="review-actions"><button type="button" class="secondary-action" onclick={() => reviewing = false}>Weiter bearbeiten</button><button type="button" disabled={finalizing} onclick={() => void finishAttempt(false)}>{finalizing ? 'Wird abgeschlossen …' : unansweredCount ? 'Trotzdem abgeben' : 'Prüfung abgeben'}</button></div></section>
+		<section class="review-screen"><span>{language.t('Vor der Abgabe')}</span><h2>{language.t('Antworten überprüfen')}</h2><p>{unansweredCount ? language.t('Noch {count} Fragen unbeantwortet.', { count: unansweredCount }) : language.t('Alle Fragen sind beantwortet.')}</p><div class="review-list">{#each data.attempt.tasks as task, taskIndex (task.attemptTaskId)}<button type="button" onclick={() => goToQuestion(taskIndex)}><span>{language.t('Aufgabe {current}', { current: taskIndex + 1 })}</span><strong>{language.t('{answered} / {total} beantwortet', { answered: task.questions.filter((question) => answeredQuestionIds.has(question.id)).length, total: task.questions.length })}</strong></button>{/each}</div><div class="review-actions"><button type="button" class="secondary-action" onclick={() => reviewing = false}>{language.t('Weiter bearbeiten')}</button><button type="button" disabled={finalizing} onclick={() => void finishAttempt(false)}>{language.t(finalizing ? 'Wird abgeschlossen …' : unansweredCount ? 'Trotzdem abgeben' : 'Prüfung abgeben')}</button></div></section>
 	{:else}
 
 	<section class="exam-task">
-		<p>Aufgabe {currentTaskIndex + 1} von {data.attempt.tasks.length}</p>
+		<p>{language.t('Aufgabe {current} von {total}', { current: currentTaskIndex + 1, total: data.attempt.tasks.length })}</p>
 		<h2>{currentTask.title}</h2>
-		<p>{currentTask.year} · {currentTask.session === 'spring' ? 'Frühjahr' : 'Herbst'} · {currentTask.period} · {currentTask.maxPoints} Punkte</p>
-		{#if currentTask.topics.length}<p>Themen: {currentTask.topics.join(', ')}</p>{/if}
+		<p>{currentTask.year} · {language.t(currentTask.session === 'spring' ? 'Frühjahr' : 'Herbst')} · {currentTask.period} · {currentTask.maxPoints} {language.t('Punkte')}</p>
+		{#if currentTask.topics.length}<p>{language.t('Themen: ')}{currentTask.topics.join(', ')}</p>{/if}
 		{#if currentTask.instructions}<p>{currentTask.instructions}</p>{/if}
-		<h3>Quellen</h3>
+		<h3>{language.t('Quellen')}</h3>
 		<SourceList sources={currentTask.sources} />
 
 		{#each currentTask.results.filter((result) => result.status === 'needs_review') as result (result.answerId)}<form id={`self-grade-${result.answerId}`} method="POST" action="?/selfGrade" use:enhance={enhanceSelfGrade}></form>{/each}
 		<form method="POST" action="?/finish" onsubmit={data.attempt.status === 'in_progress' ? (event) => { event.preventDefault(); void finishAttempt(false); } : undefined}>
 			{#each currentTask.questions as question, index (question.id)}
 				<article>
-					<h3>{index + 1}. {question.prompt} ({question.maxPoints} P.)</h3>
+					<h3>{index + 1}. {question.prompt} ({question.maxPoints} {language.t('P.')})</h3>
 					<PracticeAnswerInput {question} value={answers[question.id]} disabled={clientExpired || data.attempt.status !== 'in_progress'} onanswer={(answer) => updateAnswer(question.id, answer)} />
 					{#if data.attempt.status === 'in_progress'}
 						<p class:save-error={saveStates[question.id] === 'error'} aria-live="polite">
-							{saveStates[question.id] === 'saving' ? 'Wird gespeichert …' : saveStates[question.id] === 'saved' ? 'Gespeichert' : saveStates[question.id] === 'error' ? errors[question.id] : ''}
+							{language.t(saveStates[question.id] === 'saving' ? 'Wird gespeichert …' : saveStates[question.id] === 'saved' ? 'Gespeichert' : saveStates[question.id] === 'error' ? errors[question.id] : '')}
 						</p>
 					{:else if resultFor(question.id)}
 						{@const result = resultFor(question.id)!}
-						<p><strong>{result.status === 'pending' || result.status === 'processing' ? 'Bewertung ausstehend' : `${selfGradeOverrides[result.answerId] ?? result.score} von ${result.maximum} Punkten · ${result.correctness === 'correct' ? 'Richtig' : result.correctness === 'partial' ? 'Teilweise richtig' : result.status === 'needs_review' ? 'Selbstbewertung nötig' : 'Nicht richtig'}`}</strong></p>
+						<p><strong>{result.status === 'pending' || result.status === 'processing' ? language.t('Bewertung ausstehend') : `${selfGradeOverrides[result.answerId] ?? result.score} / ${result.maximum} ${language.t('Punkte')} · ${language.t(result.correctness === 'correct' ? 'Richtig' : result.correctness === 'partial' ? 'Teilweise richtig' : result.status === 'needs_review' ? 'Selbstbewertung nötig' : 'Nicht richtig')}`}</strong></p>
 						<p>{result.feedback}</p>
 						{#if result.status === 'needs_review'}
-							<div class="self-grade"><label>Eigene Punktzahl (0–{result.maximum}) <input form={`self-grade-${result.answerId}`} type="number" name="awardedPoints" min="0" max={result.maximum} step="0.5" required /></label><button form={`self-grade-${result.answerId}`} name="answerId" value={result.answerId}>Selbst bewerten</button></div>
+							<div class="self-grade"><label>{language.t('Eigene Punktzahl (0–{maximum})', { maximum: result.maximum })} <input form={`self-grade-${result.answerId}`} type="number" name="awardedPoints" min="0" max={result.maximum} step="0.5" required /></label><button form={`self-grade-${result.answerId}`} name="answerId" value={result.answerId}>{language.t('Selbst bewerten')}</button></div>
 						{/if}
 					{/if}
 				</article>
 			{/each}
 			{#if data.attempt.status === 'in_progress'}
 				<div class="exam-actions">
-					<p><strong>{unansweredCount}</strong> von {totalQuestions} Fragen unbeantwortet.</p>
-					<button disabled={finalizing || clientExpired}>{finalizing ? 'Wird abgeschlossen …' : 'Prüfung abgeben'}</button>
+					<p><strong>{unansweredCount}</strong> {language.t('von {total} Fragen unbeantwortet.', { total: totalQuestions })}</p>
+					<button disabled={finalizing || clientExpired}>{language.t(finalizing ? 'Wird abgeschlossen …' : 'Prüfung abgeben')}</button>
 				</div>
 			{/if}
 		</form>
@@ -337,12 +339,12 @@
 	{/if}
 
 	<div class="exam-pager">
-		<button type="button" disabled={currentTaskIndex === 0} onclick={() => currentTaskIndex--}>Vorherige Aufgabe</button>
-		<button type="button" disabled={currentTaskIndex === data.attempt.tasks.length - 1} onclick={() => currentTaskIndex++}>Nächste Aufgabe</button>
+		<button type="button" disabled={currentTaskIndex === 0} onclick={() => currentTaskIndex--}>{language.t('Vorherige Aufgabe')}</button>
+		<button type="button" disabled={currentTaskIndex === data.attempt.tasks.length - 1} onclick={() => currentTaskIndex++}>{language.t('Nächste Aufgabe')}</button>
 	</div>
 
 	{#if data.attempt.status === 'graded'}
-		<p class="review-note">Wähle oben jede Aufgabe aus, um deine Antwort, die erreichten Punkte und das Bewertungsfeedback im Detail zu prüfen.</p>
+		<p class="review-note">{language.t('Wähle oben jede Aufgabe aus, um deine Antwort, die erreichten Punkte und das Bewertungsfeedback im Detail zu prüfen.')}</p>
 	{/if}
 </main>
 

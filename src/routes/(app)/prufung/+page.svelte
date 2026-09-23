@@ -1,47 +1,49 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui';
 	import { PageHeader } from '$lib/components/page';
+	import { getLanguageContext } from '$lib/i18n';
 	import type { PageProps } from './$types';
 	let { data, form }: PageProps = $props();
+	const language = getLanguageContext();
 </script>
 
-<svelte:head><title>Prüfung – AbiPro</title></svelte:head>
+<svelte:head><title>{language.t('Prüfung')} – AbiPro</title></svelte:head>
 <main>
-	<PageHeader eyebrow="Prüfungsmodus" title="Prüfungssimulation" description="Simuliere den offiziellen Kurzantwort-Teil der ungarischen Geschichtsprüfung auf Mittelstufe." />
+	<PageHeader eyebrow={language.t('Prüfungsmodus')} title={language.t('Prüfungssimulation')} description={language.t('Simuliere den offiziellen Kurzantwort-Teil der ungarischen Geschichtsprüfung auf Mittelstufe.')} />
 
-	<section class="exam-overview" aria-label="Prüfungsumfang">
+	<section class="exam-overview" aria-label={language.t('Prüfungsumfang')}>
 		<div class="overview-intro">
-			<span class="kicker">Auf einen Blick</span>
-			<h2>Bereit für die Prüfung?</h2>
-			<p>Arbeite konzentriert und behalte deine verbleibende Zeit im Blick.</p>
+			<span class="kicker">{language.t('Auf einen Blick')}</span>
+			<h2>{language.t('Bereit für die Prüfung?')}</h2>
+			<p>{language.t('Arbeite konzentriert und behalte deine verbleibende Zeit im Blick.')}</p>
 		</div>
 		<dl class="stats">
-			<div><dt>Aufgaben</dt><dd>{data.config.taskCount}</dd></div>
-			<div><dt>Zeit</dt><dd>{data.config.timeLimitSeconds / 60}<small> Min.</small></dd></div>
-			<div><dt>Maximal</dt><dd>{data.config.targetMaximumScore}<small> P.</small></dd></div>
+			<div><dt>{language.t('Aufgaben')}</dt><dd>{data.config.taskCount}</dd></div>
+			<div><dt>{language.t('Zeit')}</dt><dd>{data.config.timeLimitSeconds / 60}<small> {language.t('Min.')}</small></dd></div>
+			<div><dt>{language.t('Maximal')}</dt><dd>{data.config.targetMaximumScore}<small> {language.t('P.')}</small></dd></div>
 		</dl>
 	</section>
 
 	{#if data.activeAttempt}
 		<section class="action-card active-card">
-			<div><span class="kicker">Noch nicht abgeschlossen</span><h2>Laufende Prüfung</h2><p>Deine Start- und Ablaufzeit sind serverseitig gespeichert. Ein Neuladen startet die Uhr nicht neu.</p></div>
-			<Button href={`/prufung/${data.activeAttempt.id}`}>Prüfung fortsetzen</Button>
+			<div><span class="kicker">{language.t('Noch nicht abgeschlossen')}</span><h2>{language.t('Laufende Prüfung')}</h2><p>{language.t('Deine Start- und Ablaufzeit sind serverseitig gespeichert. Ein Neuladen startet die Uhr nicht neu.')}</p></div>
+			<Button href={`/prufung/${data.activeAttempt.id}`}>{language.t('Prüfung fortsetzen')}</Button>
 		</section>
 	{:else if data.readiness.ready}
 		<section class="action-card start-card">
-			<div><span class="kicker">Alles vorbereitet</span><h2>Neue Prüfung</h2><p>Beim Start werden zwölf passende, unterschiedliche Aufgabenversionen ausgewählt und in dieser Reihenfolge gespeichert.</p></div>
+			<div><span class="kicker">{language.t('Alles vorbereitet')}</span><h2>{language.t('Neue Prüfung')}</h2><p>{language.t('Beim Start werden zwölf passende, unterschiedliche Aufgabenversionen ausgewählt und in dieser Reihenfolge gespeichert.')}</p></div>
 			{#if form?.message}<p role="alert" class="save-error">{form.message}</p>{/if}
-			<form method="POST" action="?/start"><Button type="submit">Prüfung starten</Button></form>
+			<form method="POST" action="?/start"><Button type="submit">{language.t('Prüfung starten')}</Button></form>
 		</section>
 	{:else}
 		<section class="action-card readiness-message" role="status">
-			<div><span class="kicker">Noch nicht verfügbar</span>
-			<h2>Prüfungsmodus noch nicht bereit</h2>
-			<p>Der veröffentlichte Aufgabenpool erfüllt die offiziellen Regeln noch nicht. Die Vorgaben werden nicht automatisch gelockert.</p>
+			<div><span class="kicker">{language.t('Noch nicht verfügbar')}</span>
+			<h2>{language.t('Prüfungsmodus noch nicht bereit')}</h2>
+			<p>{language.t('Der veröffentlichte Aufgabenpool erfüllt die offiziellen Regeln noch nicht. Die Vorgaben werden nicht automatisch gelockert.')}</p>
 			</div>
 			<ul>
 				{#each data.readiness.missingRules as rule (rule.position)}
-					<li>Position {rule.position}: {rule.label} ({rule.maximumPoints} Punkte)</li>
+					<li>{language.t('Position {position}: {label} ({points} Punkte)', { position: rule.position, label: rule.label, points: rule.maximumPoints })}</li>
 				{/each}
 			</ul>
 		</section>

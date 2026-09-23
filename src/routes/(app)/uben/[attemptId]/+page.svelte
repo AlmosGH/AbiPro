@@ -7,12 +7,14 @@
 	import { announceStatus } from '$lib/client/status';
 	import PracticeAnswerInput from '$lib/components/questions/PracticeAnswerInput.svelte';
 	import SourceList from '$lib/components/task/SourceList.svelte';
+	import { getLanguageContext } from '$lib/i18n';
 	import type { AnswerPayload } from '$lib/types/questions';
 	import type { LearnerQuestion } from '$lib/types/tasks';
 	import type { SaveState } from '$lib/types/practice';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+	const language = getLanguageContext();
 	let currentIndex = $state(0);
 	let mobilePane = $state<'source' | 'question'>('question');
 	let showOverview = $state(false);
@@ -41,7 +43,7 @@
 			answers = value.answers;
 			currentIndex = value.currentIndex;
 			mobilePane = value.mobilePane;
-			announceStatus('Dein unvollständiger Versuch wurde wiederhergestellt.', 'info');
+			announceStatus(language.t('Dein unvollständiger Versuch wurde wiederhergestellt.'), 'info');
 		}
 	};
 
@@ -51,10 +53,10 @@
 		if (channel) {
 			channel.onmessage = (event) => {
 				if (event.data?.type === 'open' && event.data?.tabId !== tabId) {
-					announceStatus('Dieser Versuch ist auch in einem anderen Tab geöffnet. Dortige Änderungen können deine überschreiben.', 'warning', 0);
+					announceStatus(language.t('Dieser Versuch ist auch in einem anderen Tab geöffnet. Dortige Änderungen können deine überschreiben.'), 'warning', 0);
 					channel.postMessage({ type: 'present', tabId });
 				} else if (event.data?.type === 'present' && event.data?.tabId !== tabId) {
-					announceStatus('Dieser Versuch ist auch in einem anderen Tab geöffnet.', 'warning', 0);
+					announceStatus(language.t('Dieser Versuch ist auch in einem anderen Tab geöffnet.'), 'warning', 0);
 				}
 			};
 			channel.postMessage({ type: 'open', tabId });
@@ -99,11 +101,11 @@
 
 	function answerLabel(answer: AnswerPayload) {
 		switch (answer.kind) {
-			case 'choice': return answer.optionId || 'Keine Antwort';
-			case 'multiple_choice': return answer.optionIds.join(', ') || 'Keine Antwort';
-			case 'matching': return answer.pairs.map((pair) => `${pair.leftId} → ${pair.rightId}`).join(', ') || 'Keine Antwort';
-			case 'ordering': return answer.itemIds.join(' → ') || 'Keine Antwort';
-			case 'short_text': return answer.text || 'Keine Antwort';
+			case 'choice': return answer.optionId || language.t('Keine Antwort');
+			case 'multiple_choice': return answer.optionIds.join(', ') || language.t('Keine Antwort');
+			case 'matching': return answer.pairs.map((pair) => `${pair.leftId} → ${pair.rightId}`).join(', ') || language.t('Keine Antwort');
+			case 'ordering': return answer.itemIds.join(' → ') || language.t('Keine Antwort');
+			case 'short_text': return answer.text || language.t('Keine Antwort');
 		}
 	}
 
@@ -149,7 +151,7 @@
 		if (saved.some((success) => !success)) { submitting = false; return; }
 		const response = await fetch('?/submit', { method: 'POST', headers: { 'x-sveltekit-action': 'true' }, body: new FormData(formElement) });
 		const result: ActionResult = deserialize(await response.text());
-		if (result.type === 'success') { await invalidate(`attempt:practice:${data.attempt.id}`); await applyAction(result); announceStatus('Übung abgegeben.', 'success'); }
+		if (result.type === 'success') { await invalidate(`attempt:practice:${data.attempt.id}`); await applyAction(result); announceStatus(language.t('Übung abgegeben.'), 'success'); }
 		else { await applyAction(result); submitError = 'Die Übung konnte nicht abgegeben werden. Bitte versuche es erneut.'; submitting = false; }
 	}
 
@@ -163,42 +165,42 @@
 			await update({ reset: false, invalidateAll: false });
 			if (result.type === 'success') {
 				await invalidate(`attempt:practice:${data.attempt.id}`);
-				announceStatus('Selbstbewertung gespeichert.', 'success');
+				announceStatus(language.t('Selbstbewertung gespeichert.'), 'success');
 			} else {
 				delete selfGradeOverrides[answerId];
-				announceStatus('Selbstbewertung konnte nicht gespeichert werden.', 'danger');
+				announceStatus(language.t('Selbstbewertung konnte nicht gespeichert werden.'), 'danger');
 			}
 		};
 	};
 </script>
 
-<svelte:head><title>{data.attempt.title} – Üben – AbiPro</title></svelte:head>
+<svelte:head><title>{data.attempt.title} – {language.t('Üben')} – AbiPro</title></svelte:head>
 <main class="practice-page">
-	<header class="practice-header"><div><a href="/uben">← Übung verlassen</a><h1>{data.attempt.title}</h1><p>{data.attempt.origin === 'ujkor' ? 'Újkor.hu-Sammlung' : `${data.attempt.year} · ${data.attempt.session === 'spring' ? 'Frühjahr' : 'Herbst'}`} · {data.attempt.period} · {data.attempt.historyScope === 'hungarian' ? 'Ungarische Geschichte' : 'Weltgeschichte'} · {data.attempt.maxScore} Punkte</p></div>{#if data.attempt.status === 'in_progress'}<div class:save-problem={saveStatus === 'error'} class="save-indicator" aria-live="polite"><i></i>{saveStatus === 'saving' ? 'Wird gespeichert …' : saveStatus === 'error' ? 'Speichern fehlgeschlagen' : saveStatus === 'saved' ? 'Alles gespeichert' : 'Autosave aktiv'}</div>{/if}</header>
+	<header class="practice-header"><div><a href="/uben">{language.t('← Übung verlassen')}</a><h1>{data.attempt.title}</h1><p>{data.attempt.origin === 'ujkor' ? language.t('Újkor.hu-Sammlung') : `${data.attempt.year} · ${language.t(data.attempt.session === 'spring' ? 'Frühjahr' : 'Herbst')}`} · {data.attempt.period} · {language.t(data.attempt.historyScope === 'hungarian' ? 'Ungarische Geschichte' : 'Weltgeschichte')} · {data.attempt.maxScore} {language.t('Punkte')}</p></div>{#if data.attempt.status === 'in_progress'}<div class:save-problem={saveStatus === 'error'} class="save-indicator" aria-live="polite"><i></i>{language.t(saveStatus === 'saving' ? 'Wird gespeichert …' : saveStatus === 'error' ? 'Speichern fehlgeschlagen' : saveStatus === 'saved' ? 'Alles gespeichert' : 'Autosave aktiv')}</div>{/if}</header>
 
 	{#if data.attempt.status === 'graded'}
-		<section class="result-summary"><span>Dein Ergebnis</span><strong>{data.attempt.score} / {data.attempt.maxScore}</strong><p>{data.bestAttempt ? `Dein Bestwert: ${data.bestAttempt.score} von ${data.bestAttempt.maxScore} Punkten.` : 'Jeder Versuch macht Muster sichtbar.'}</p></section>
+		<section class="result-summary"><span>{language.t('Dein Ergebnis')}</span><strong>{data.attempt.score} / {data.attempt.maxScore}</strong><p>{data.bestAttempt ? language.t('Dein Bestwert: {score} von {maximum} Punkten.', { score: data.bestAttempt.score ?? 0, maximum: data.bestAttempt.maxScore }) : language.t('Jeder Versuch macht Muster sichtbar.')}</p></section>
 	{/if}
-	{#if gradingPending}<p class="readiness-message" role="status">Die KI-Bewertung läuft. Der Status wird automatisch aktualisiert …</p>{/if}
+	{#if gradingPending}<p class="readiness-message" role="status">{language.t('Die KI-Bewertung läuft. Der Status wird automatisch aktualisiert …')}</p>{/if}
 
-	<div class="mobile-tabs" role="tablist"><button class:active={mobilePane === 'question'} onclick={() => mobilePane = 'question'}>Frage</button><button class:active={mobilePane === 'source'} onclick={() => mobilePane = 'source'}>Quellen ({data.attempt.sources.length})</button></div>
+	<div class="mobile-tabs" role="tablist"><button class:active={mobilePane === 'question'} onclick={() => mobilePane = 'question'}>{language.t('Frage')}</button><button class:active={mobilePane === 'source'} onclick={() => mobilePane = 'source'}>{language.t('Quellen')} ({data.attempt.sources.length})</button></div>
 	<div class="player-grid">
-		<aside class:mobile-hidden={mobilePane !== 'source'} class="source-pane"><div><span class="pane-label">Quellenmaterial</span><SourceList sources={data.attempt.sources} /></div></aside>
+		<aside class:mobile-hidden={mobilePane !== 'source'} class="source-pane"><div><span class="pane-label">{language.t('Quellenmaterial')}</span><SourceList sources={data.attempt.sources} /></div></aside>
 		<section class:mobile-hidden={mobilePane !== 'question'} class="question-pane">
-			<div class="question-toolbar"><span>Frage {currentIndex + 1} von {data.attempt.questions.length}</span><button type="button" class="overview-button" onclick={() => showOverview = !showOverview}>Übersicht</button></div>
-			{#if showOverview}<nav class="question-overview" aria-label="Fragenübersicht">{#each data.attempt.questions as question, index (question.id)}<button type="button" class:current={index === currentIndex} class:answered={isAnswered(answers[question.id])} onclick={() => { currentIndex = index; showOverview = false; }}>{index + 1}<span class="sr-only">. Frage {isAnswered(answers[question.id]) ? 'beantwortet' : 'offen'}</span></button>{/each}</nav>{/if}
+			<div class="question-toolbar"><span>{language.t('Frage {current} von {total}', { current: currentIndex + 1, total: data.attempt.questions.length })}</span><button type="button" class="overview-button" onclick={() => showOverview = !showOverview}>{language.t('Übersicht')}</button></div>
+			{#if showOverview}<nav class="question-overview" aria-label={language.t('Fragenübersicht')}>{#each data.attempt.questions as question, index (question.id)}<button type="button" class:current={index === currentIndex} class:answered={isAnswered(answers[question.id])} onclick={() => { currentIndex = index; showOverview = false; }}>{index + 1}<span class="sr-only">. {language.t('Frage')} {language.t(isAnswered(answers[question.id]) ? 'beantwortet' : 'offen')}</span></button>{/each}</nav>{/if}
 			{#if data.attempt.instructions}<p class="instructions">{data.attempt.instructions}</p>{/if}
-			{#if form?.message}<p role="alert">{form.message}</p>{/if}{#if submitError}<p role="alert">{submitError}</p>{/if}
+			{#if form?.message}<p role="alert">{form.message}</p>{/if}{#if submitError}<p role="alert">{language.t(submitError)}</p>{/if}
 			{#each data.attempt.results.filter((result) => result.status === 'needs_review') as result (result.answerId)}<form id={`self-grade-${result.answerId}`} method="POST" action="?/selfGrade" use:enhance={enhanceSelfGrade}></form>{/each}
 			{#if data.attempt.results.some((result) => result.status === 'needs_review')}<form id="retry-auto-grade" method="POST" action="?/retryAutoGrade"></form>{/if}
 			<form method="POST" action="?/submit" onsubmit={data.attempt.status === 'in_progress' ? submitAttempt : undefined}>
 				<article class="question-card"><div class="question-title"><span>{currentIndex + 1}</span><h2>{currentQuestion.prompt}</h2><b>{currentQuestion.maxPoints} P.</b></div><PracticeAnswerInput question={currentQuestion} value={answers[currentQuestion.id]} disabled={data.attempt.status !== 'in_progress'} onanswer={(answer) => updateAnswer(currentQuestion.id, answer)} />
-				{#if data.attempt.status !== 'in_progress' && resultFor(currentQuestion.id)}{@const result = resultFor(currentQuestion.id)!}<div class="grading"><section><span>Deine Antwort</span><p>{answerLabel(answers[currentQuestion.id])}</p></section><section><span>Ergebnis</span><strong>{result.status === 'pending' || result.status === 'processing' ? 'Bewertung ausstehend' : `${selfGradeOverrides[result.answerId] ?? result.score} von ${result.maximum} Punkten`}</strong></section><section><span>Feedback</span><p>{result.feedback || 'Kein zusätzliches Feedback.'}</p></section>{#if result.solution}<section class="solution"><span>Musterlösung</span><p>{result.solution}</p></section>{/if}{#if result.status === 'needs_review'}<div class="self-grade"><button form="retry-auto-grade">Automatische Bewertung erneut versuchen</button><label>Eigene Punktzahl (0–{result.maximum}) <input form={`self-grade-${result.answerId}`} type="number" name="awardedPoints" min="0" max={result.maximum} step="0.5" required /></label><button form={`self-grade-${result.answerId}`} name="answerId" value={result.answerId}>Selbst bewerten</button></div>{/if}</div>{/if}</article>
-				<div class="question-actions"><button type="button" class="secondary-action" disabled={currentIndex === 0} onclick={() => currentIndex--}>← Zurück</button>{#if currentIndex < data.attempt.questions.length - 1}<button type="button" onclick={() => currentIndex++}>Nächste Frage →</button>{:else if data.attempt.status === 'in_progress'}<button disabled={submitting}>{submitting ? 'Wird abgegeben …' : 'Übung auswerten'}</button>{/if}</div>
+				{#if data.attempt.status !== 'in_progress' && resultFor(currentQuestion.id)}{@const result = resultFor(currentQuestion.id)!}<div class="grading"><section><span>{language.t('Deine Antwort')}</span><p>{answerLabel(answers[currentQuestion.id])}</p></section><section><span>{language.t('Ergebnis')}</span><strong>{result.status === 'pending' || result.status === 'processing' ? language.t('Bewertung ausstehend') : language.t('{score} von {maximum} Punkten', { score: selfGradeOverrides[result.answerId] ?? result.score, maximum: result.maximum })}</strong></section><section><span>{language.t('Feedback')}</span><p>{result.feedback || language.t('Kein zusätzliches Feedback.')}</p></section>{#if result.solution}<section class="solution"><span>{language.t('Musterlösung')}</span><p>{result.solution}</p></section>{/if}{#if result.status === 'needs_review'}<div class="self-grade"><button form="retry-auto-grade">{language.t('Automatische Bewertung erneut versuchen')}</button><label>{language.t('Eigene Punktzahl (0–{maximum})', { maximum: result.maximum })} <input form={`self-grade-${result.answerId}`} type="number" name="awardedPoints" min="0" max={result.maximum} step="0.5" required /></label><button form={`self-grade-${result.answerId}`} name="answerId" value={result.answerId}>{language.t('Selbst bewerten')}</button></div>{/if}</div>{/if}</article>
+				<div class="question-actions"><button type="button" class="secondary-action" disabled={currentIndex === 0} onclick={() => currentIndex--}>{language.t('← Zurück')}</button>{#if currentIndex < data.attempt.questions.length - 1}<button type="button" onclick={() => currentIndex++}>{language.t('Nächste Frage →')}</button>{:else if data.attempt.status === 'in_progress'}<button disabled={submitting}>{language.t(submitting ? 'Wird abgegeben …' : 'Übung auswerten')}</button>{/if}</div>
 			</form>
 		</section>
 	</div>
-	{#if data.attempt.status === 'graded'}<div class="next-actions"><a class="button-link" href={`/uben?task=${data.attempt.slug}`}>Noch einmal versuchen</a><a class="button-link secondary-action" href="/uben">Eine ähnliche Aufgabe üben</a></div>{/if}
+	{#if data.attempt.status === 'graded'}<div class="next-actions"><a class="button-link" href={`/uben?task=${data.attempt.slug}`}>{language.t('Noch einmal versuchen')}</a><a class="button-link secondary-action" href="/uben">{language.t('Eine ähnliche Aufgabe üben')}</a></div>{/if}
 </main>
 
 <style>

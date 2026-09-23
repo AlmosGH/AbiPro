@@ -3,21 +3,23 @@
 	import { page } from '$app/state';
 	import { Badge, Button, EmptyState } from '$lib/components/ui';
 	import { PageHeader } from '$lib/components/page';
+	import { getLanguageContext } from '$lib/i18n';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	const language = getLanguageContext();
 	function initialSearchValue() { return data.filters.query ?? ''; }
 	let searchValue = $state(initialSearchValue());
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	const years = $derived([...new Set(data.sessions.map((session) => session.year))]);
 	const currentReturn = $derived(`${page.url.pathname}${page.url.search}`);
 	const activeFilters = $derived([
-		data.filters.query ? { key: 'q', label: `Suche: ${data.filters.query}` } : null,
-		data.filters.origin ? { key: 'origin', label: data.filters.origin === 'ujkor' ? 'Újkor.hu-Sammlung' : 'Offizielle Prüfungen' } : null,
-		data.filters.historyScope ? { key: 'historyScope', label: data.filters.historyScope === 'hungarian' ? 'Ungarische Geschichte' : 'Weltgeschichte' } : null,
-		data.filters.curriculumId ? { key: 'curriculumId', label: data.curricula.find((item) => item.id === data.filters.curriculumId)?.name ?? 'Lehrplan' } : null,
-		data.filters.periodId ? { key: 'periodId', label: data.periods.find((item) => item.id === data.filters.periodId)?.name ?? 'Epoche' } : null,
-		data.filters.topicId ? { key: 'topicId', label: data.topics.find((item) => item.id === data.filters.topicId)?.name ?? 'Thema' } : null,
+		data.filters.query ? { key: 'q', label: language.t('Suche: {query}', { query: data.filters.query }) } : null,
+		data.filters.origin ? { key: 'origin', label: data.filters.origin === 'ujkor' ? 'Újkor.hu' : language.t('Offizielle Prüfungen') } : null,
+		data.filters.historyScope ? { key: 'historyScope', label: language.t(data.filters.historyScope === 'hungarian' ? 'Ungarische Geschichte' : 'Weltgeschichte') } : null,
+		data.filters.curriculumId ? { key: 'curriculumId', label: data.curricula.find((item) => item.id === data.filters.curriculumId)?.name ?? language.t('Lehrplan') } : null,
+		data.filters.periodId ? { key: 'periodId', label: data.periods.find((item) => item.id === data.filters.periodId)?.name ?? language.t('Epoche') } : null,
+		data.filters.topicId ? { key: 'topicId', label: data.topics.find((item) => item.id === data.filters.topicId)?.name ?? language.t('Thema') } : null,
 		data.filters.year ? { key: 'year', label: String(data.filters.year) } : null,
 		data.filters.session ? { key: 'session', label: data.filters.session === 'spring' ? 'Frühjahr' : 'Herbst' } : null
 	].filter((item): item is { key: string; label: string } => item !== null));
@@ -45,43 +47,43 @@
 	});
 </script>
 
-<svelte:head><title>Aufgaben – AbiPro</title><meta name="description" content="Veröffentlichte Aufgaben für die deutschsprachige Geschichte-Abiturvorbereitung." /></svelte:head>
+<svelte:head><title>{language.t('Aufgaben')} – AbiPro</title><meta name="description" content={language.t('Veröffentlichte Aufgaben für die deutschsprachige Geschichte-Abiturvorbereitung.')} /></svelte:head>
 <main>
-	<PageHeader eyebrow="Aufgabenpool" title="Finde deine nächste Aufgabe" description="Suche in offiziellen Prüfungen und der Újkor.hu-Sammlung und übe gezielt nach Thema." />
-	<section class="catalogue-tools" aria-label="Aufgaben durchsuchen und filtern">
+	<PageHeader eyebrow={language.t('Aufgabenpool')} title={language.t('Finde deine nächste Aufgabe')} description={language.t('Suche in offiziellen Prüfungen und der Újkor.hu-Sammlung und übe gezielt nach Thema.')} />
+	<section class="catalogue-tools" aria-label={language.t('Aufgaben durchsuchen und filtern')}>
 		<div class="primary-tools">
-			<label class="search-field"><span class="sr-only">Aufgaben durchsuchen</span><input type="search" value={searchValue} oninput={(event) => queueSearch(event.currentTarget.value)} placeholder="Titel oder Stichwort suchen …" /></label>
-			<label class="sort-field"><span>Sortieren</span><select value={data.filters.sort} onchange={(event) => goto(urlWith({ sort: event.currentTarget.value }))}><option value="newest">Neueste zuerst</option><option value="unpracticed">Noch nicht geübt</option><option value="weakest">Schwächstes Thema</option><option value="year">Prüfungsjahr</option></select></label>
+			<label class="search-field"><span class="sr-only">{language.t('Aufgaben durchsuchen')}</span><input type="search" value={searchValue} oninput={(event) => queueSearch(event.currentTarget.value)} placeholder={language.t('Titel oder Stichwort suchen …')} /></label>
+			<label class="sort-field"><span>{language.t('Sortieren')}</span><select value={data.filters.sort} onchange={(event) => goto(urlWith({ sort: event.currentTarget.value }))}><option value="newest">{language.t('Neueste zuerst')}</option><option value="unpracticed">{language.t('Noch nicht geübt')}</option><option value="weakest">{language.t('Schwächstes Thema')}</option><option value="year">{language.t('Prüfungsjahr')}</option></select></label>
 		</div>
 		<details class="filter-drawer">
-			<summary>Weitere Filter <span>{activeFilters.length || ''}</span></summary>
+			<summary>{language.t('Weitere Filter')}{#if activeFilters.length}<span>{activeFilters.length}</span>{/if}</summary>
 			<form method="GET" class="filters">
 				<input type="hidden" name="q" value={data.filters.query ?? ''} /><input type="hidden" name="sort" value={data.filters.sort} />
-				<label>Sammlung<select name="origin"><option value="">Alle</option><option value="official" selected={data.filters.origin === 'official'}>Offizielle Prüfungen</option><option value="ujkor" selected={data.filters.origin === 'ujkor'}>Újkor.hu</option></select></label>
-				<label>Geschichte<select name="historyScope"><option value="">Alle</option><option value="hungarian" selected={data.filters.historyScope === 'hungarian'}>Ungarisch</option><option value="global" selected={data.filters.historyScope === 'global'}>Weltgeschichte</option></select></label>
-				<label>Lehrplan<select name="curriculumId"><option value="">Alle</option>{#each data.curricula as item (item.id)}<option value={item.id} selected={data.filters.curriculumId === item.id}>{item.name}</option>{/each}</select></label>
-				<label>Epoche<select name="periodId"><option value="">Alle</option>{#each data.periods as item (item.id)}<option value={item.id} selected={data.filters.periodId === item.id}>{item.name}</option>{/each}</select></label>
-				<label>Thema<select name="topicId"><option value="">Alle</option>{#each data.topics as item (item.id)}<option value={item.id} selected={data.filters.topicId === item.id}>{item.name}</option>{/each}</select></label>
-				<label>Jahr<select name="year"><option value="">Alle</option>{#each years as year (year)}<option value={year} selected={data.filters.year === year}>{year}</option>{/each}</select></label>
-				<label>Termin<select name="session"><option value="">Alle</option><option value="spring" selected={data.filters.session === 'spring'}>Frühjahr</option><option value="autumn" selected={data.filters.session === 'autumn'}>Herbst</option></select></label>
-				<div class="filter-actions"><Button type="submit">Filter anwenden</Button><Button href="/aufgaben" variant="ghost">Alles zurücksetzen</Button></div>
+				<label>{language.t('Sammlung')}<select name="origin"><option value="">{language.t('Alle')}</option><option value="official" selected={data.filters.origin === 'official'}>{language.t('Offizielle Prüfungen')}</option><option value="ujkor" selected={data.filters.origin === 'ujkor'}>Újkor.hu</option></select></label>
+				<label>{language.t('Geschichte')}<select name="historyScope"><option value="">{language.t('Alle')}</option><option value="hungarian" selected={data.filters.historyScope === 'hungarian'}>{language.t('Ungarisch')}</option><option value="global" selected={data.filters.historyScope === 'global'}>{language.t('Weltgeschichte')}</option></select></label>
+				<label>{language.t('Lehrplan')}<select name="curriculumId"><option value="">{language.t('Alle')}</option>{#each data.curricula as item (item.id)}<option value={item.id} selected={data.filters.curriculumId === item.id}>{item.name}</option>{/each}</select></label>
+				<label>{language.t('Epoche')}<select name="periodId"><option value="">{language.t('Alle')}</option>{#each data.periods as item (item.id)}<option value={item.id} selected={data.filters.periodId === item.id}>{item.name}</option>{/each}</select></label>
+				<label>{language.t('Thema')}<select name="topicId"><option value="">{language.t('Alle')}</option>{#each data.topics as item (item.id)}<option value={item.id} selected={data.filters.topicId === item.id}>{item.name}</option>{/each}</select></label>
+				<label>{language.t('Jahr')}<select name="year"><option value="">{language.t('Alle')}</option>{#each years as year (year)}<option value={year} selected={data.filters.year === year}>{year}</option>{/each}</select></label>
+				<label>{language.t('Termin')}<select name="session"><option value="">{language.t('Alle')}</option><option value="spring" selected={data.filters.session === 'spring'}>{language.t('Frühjahr')}</option><option value="autumn" selected={data.filters.session === 'autumn'}>{language.t('Herbst')}</option></select></label>
+				<div class="filter-actions"><Button type="submit">{language.t('Filter anwenden')}</Button><Button href="/aufgaben" variant="ghost">{language.t('Alles zurücksetzen')}</Button></div>
 			</form>
 		</details>
-		{#if activeFilters.length}<div class="filter-chips" aria-label="Aktive Filter">{#each activeFilters as filter (filter.key)}<a href={urlWith({ [filter.key]: null })}>{filter.label}<span aria-hidden="true">×</span><span class="sr-only"> entfernen</span></a>{/each}</div>{/if}
+		{#if activeFilters.length}<div class="filter-chips" aria-label={language.t('Aktive Filter')}>{#each activeFilters as filter (filter.key)}<a href={urlWith({ [filter.key]: null })}>{filter.label}<span aria-hidden="true">×</span><span class="sr-only">{language.t(' entfernen')}</span></a>{/each}</div>{/if}
 	</section>
-	<div class="result-line"><strong>{data.total}</strong> {data.total === 1 ? 'Aufgabe' : 'Aufgaben'} gefunden</div>
+	<div class="result-line">{language.t('{count} Aufgaben gefunden', { count: data.total })}</div>
 	{#if data.tasks.length}
 		<div class="task-grid">{#each data.tasks as task (task.slug)}
 			<article class="task-card">
-				<div class="card-top"><Badge tone={task.practiced ? 'success' : 'neutral'}>{task.practiced ? 'Geübt' : 'Neu'}</Badge><span>{task.origin === 'ujkor' ? 'Újkor.hu' : `${task.year} · ${task.session === 'spring' ? 'Frühjahr' : 'Herbst'}`}</span></div>
+				<div class="card-top"><Badge tone={task.practiced ? 'success' : 'neutral'}>{language.t(task.practiced ? 'Geübt' : 'Neu')}</Badge><span>{task.origin === 'ujkor' ? 'Újkor.hu' : `${task.year} · ${language.t(task.session === 'spring' ? 'Frühjahr' : 'Herbst')}`}</span></div>
 				<div><p class="period">{task.period}</p><h2>{task.title}</h2></div>
-				<p>{task.historyScope === 'hungarian' ? 'Ungarische Geschichte' : 'Weltgeschichte'}</p>
+				<p>{language.t(task.historyScope === 'hungarian' ? 'Ungarische Geschichte' : 'Weltgeschichte')}</p>
 				<div class="topics">{#each task.topics.slice(0, 3) as topic (topic)}<span>{topic}</span>{/each}</div>
-				<div class="card-footer"><span><strong>{task.maxPoints}</strong> Punkte</span><Button href={`/aufgaben/${task.slug}?return=${encodeURIComponent(currentReturn)}`}>Aufgabe öffnen</Button></div>
+				<div class="card-footer"><span><strong>{task.maxPoints}</strong> {language.t('Punkte')}</span><Button href={`/aufgaben/${task.slug}?return=${encodeURIComponent(currentReturn)}`}>{language.t('Aufgabe öffnen')}</Button></div>
 			</article>
 		{/each}</div>
-		{#if data.page < data.pageCount}<div class="load-more"><Button href={urlWith({ page: String(data.page + 1) })} variant="secondary">Mehr Aufgaben laden</Button><span>{data.tasks.length} von {data.total}</span></div>{/if}
-	{:else}<EmptyState title="Keine passenden Aufgaben" description="Ändere einen Filter oder setze die Auswahl zurück, um wieder alle Aufgaben zu sehen.">{#snippet action()}<Button href="/aufgaben" variant="secondary">Filter zurücksetzen</Button>{/snippet}</EmptyState>{/if}
+		{#if data.page < data.pageCount}<div class="load-more"><Button href={urlWith({ page: String(data.page + 1) })} variant="secondary">{language.t('Mehr Aufgaben laden')}</Button><span>{data.tasks.length} / {data.total}</span></div>{/if}
+	{:else}<EmptyState title={language.t('Keine passenden Aufgaben')} description={language.t('Ändere einen Filter oder setze die Auswahl zurück, um wieder alle Aufgaben zu sehen.')}>{#snippet action()}<Button href="/aufgaben" variant="secondary">{language.t('Filter zurücksetzen')}</Button>{/snippet}</EmptyState>{/if}
 </main>
 
 <style>
@@ -98,7 +100,6 @@
 	.filter-chips a, .topics span { display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .65rem; border-radius: 999px; background: var(--color-surface-soft); color: var(--color-ink); font-size: .78rem; font-weight: 700; text-decoration: none; }
 	.filter-chips a:hover { background: var(--color-brand-soft); color: var(--color-brand-strong); }
 	.result-line { margin: var(--space-6) 0 var(--space-4); color: var(--color-muted); font-size: .88rem; }
-	.result-line strong { color: var(--color-ink); }
 	.task-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
 	.task-card { display: grid; min-height: 19rem; align-content: space-between; gap: var(--space-5); padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); transition: transform var(--duration-base), box-shadow var(--duration-base); }
 	.task-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }

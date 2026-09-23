@@ -1,8 +1,10 @@
 <script lang="ts">
 	import type { LearnerTaskSource } from '$lib/types/tasks';
+	import { getLanguageContext } from '$lib/i18n';
 
 	interface Props { sources: LearnerTaskSource[] }
 	let { sources }: Props = $props();
+	const language = getLanguageContext();
 
 	function record(value: unknown): Record<string, unknown> {
 		return value && typeof value === 'object' && !Array.isArray(value)
@@ -21,7 +23,7 @@
 </script>
 
 <details class="source-drawer" open>
-	<summary>Quellen anzeigen <span>{sources.length}</span></summary>
+	<summary>{language.t('Quellen anzeigen')} <span>{sources.length}</span></summary>
 	<div class="source-list">
 {#each sources as source (source.id)}
 	{@const content = record(source.content)}
@@ -33,11 +35,11 @@
 	{@const imageWidth = positiveNumber(content.width, 1200)}
 	{@const imageHeight = positiveNumber(content.height, 1697)}
 	<article>
-		<h3>{source.title ?? `Quelle ${source.position + 1}`}</h3>
+		<h3>{source.title ?? `${language.t('Quelle')} ${source.position + 1}`}</h3>
 		{#if source.assetUrl}
-			<a class="source-image" href={source.assetUrl} target="_blank" rel="noreferrer" title="Quelle in voller Größe öffnen"><img src={source.assetUrl} alt={source.assetAltText || source.title || 'Originalseite der Aufgabe'} width={imageWidth} height={imageHeight} sizes="(max-width: 768px) calc(100vw - 3rem), (max-width: 1280px) 38vw, 480px" loading={source.position === 0 ? 'eager' : 'lazy'} fetchpriority={source.position === 0 ? 'high' : 'auto'} /></a>
+			<a class="source-image" href={source.assetUrl} target="_blank" rel="noreferrer" title={language.t('Quelle in voller Größe öffnen')}><img src={source.assetUrl} alt={source.assetAltText || source.title || language.t('Originalseite der Aufgabe')} width={imageWidth} height={imageHeight} sizes="(max-width: 768px) calc(100vw - 3rem), (max-width: 1280px) 38vw, 480px" loading={source.position === 0 ? 'eager' : 'lazy'} fetchpriority={source.position === 0 ? 'high' : 'auto'} /></a>
 		{:else if stringValue(content.url)}
-			<a class="source-image" href={stringValue(content.url)} target="_blank" rel="noreferrer" title="Quelle in voller Größe öffnen"><img src={stringValue(content.url)} alt={stringValue(content.alt) || source.title || 'Quelle der Aufgabe'} width={imageWidth} height={imageHeight} sizes="(max-width: 768px) calc(100vw - 3rem), (max-width: 1280px) 38vw, 480px" loading={source.position === 0 ? 'eager' : 'lazy'} fetchpriority={source.position === 0 ? 'high' : 'auto'} /></a>
+			<a class="source-image" href={stringValue(content.url)} target="_blank" rel="noreferrer" title={language.t('Quelle in voller Größe öffnen')}><img src={stringValue(content.url)} alt={stringValue(content.alt) || source.title || language.t('Quelle der Aufgabe')} width={imageWidth} height={imageHeight} sizes="(max-width: 768px) calc(100vw - 3rem), (max-width: 1280px) 38vw, 480px" loading={source.position === 0 ? 'eager' : 'lazy'} fetchpriority={source.position === 0 ? 'high' : 'auto'} /></a>
 		{:else if hasStructuredText}
 			<p>{text}</p>
 		{:else if hasStructuredTable}
@@ -50,7 +52,7 @@
 				</tbody>
 			</table>
 		{:else}
-			<p>Quelle nicht verfügbar.</p>
+			<p>{language.t('Quelle nicht verfügbar.')}</p>
 		{/if}
 	</article>
 {/each}

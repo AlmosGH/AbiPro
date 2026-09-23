@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { AnswerPayload } from '$lib/types/questions';
 	import type { LearnerQuestion } from '$lib/types/tasks';
+	import { getLanguageContext } from '$lib/i18n';
 
 	interface Props {
 		question: LearnerQuestion;
@@ -10,6 +11,7 @@
 	}
 
 	let { question, value, disabled = false, onanswer }: Props = $props();
+	const language = getLanguageContext();
 
 	function toggleMultiple(optionId: string, checked: boolean) {
 		if (value.kind !== 'multiple_choice') return;
@@ -19,14 +21,14 @@
 	}
 
 	function selectionHint() {
-		if (question.config.kind !== 'multiple_choice') return 'Eine oder mehrere Antworten auswählen';
+		if (question.config.kind !== 'multiple_choice') return language.t('Eine oder mehrere Antworten auswählen');
 		const minimum = question.config.minimumSelections;
 		const maximum = question.config.maximumSelections;
-		if (minimum !== undefined && maximum !== undefined && minimum === maximum) return `Genau ${minimum} Antworten auswählen`;
-		if (minimum !== undefined && maximum !== undefined) return `${minimum} bis ${maximum} Antworten auswählen`;
-		if (minimum !== undefined) return `Mindestens ${minimum} Antworten auswählen`;
-		if (maximum !== undefined) return `Höchstens ${maximum} Antworten auswählen`;
-		return 'Eine oder mehrere Antworten auswählen';
+		if (minimum !== undefined && maximum !== undefined && minimum === maximum) return language.t('Genau {count} Antworten auswählen', { count: minimum });
+		if (minimum !== undefined && maximum !== undefined) return language.t('{min} bis {max} Antworten auswählen', { min: minimum, max: maximum });
+		if (minimum !== undefined) return language.t('Mindestens {count} Antworten auswählen', { count: minimum });
+		if (maximum !== undefined) return language.t('Höchstens {count} Antworten auswählen', { count: maximum });
+		return language.t('Eine oder mehrere Antworten auswählen');
 	}
 
 	function setMatch(leftId: string, rightId: string) {
@@ -52,7 +54,7 @@
 
 {#if question.config.kind === 'choice' && value.kind === 'choice'}
 	<fieldset class="choice-group" disabled={disabled}>
-		<legend>Eine Antwort auswählen</legend>
+		<legend>{language.t('Eine Antwort auswählen')}</legend>
 		{#each question.config.options as option (option.id)}
 			<label class:selected={value.optionId === option.id} class="choice-option"><input type="radio" name={`question-${question.id}`} checked={value.optionId === option.id} onchange={() => onanswer({ kind: 'choice', optionId: option.id })} /><span>{option.label}</span></label>
 		{/each}
@@ -65,14 +67,14 @@
 			{@const maximumReached = question.config.maximumSelections !== undefined && value.optionIds.length >= question.config.maximumSelections}
 			<label class:selected class:limit-reached={maximumReached && !selected} class="choice-option"><input type="checkbox" checked={selected} disabled={disabled || maximumReached && !selected} onchange={(event) => toggleMultiple(option.id, event.currentTarget.checked)} /><span>{option.label}</span></label>
 		{/each}
-		{#if question.config.maximumSelections !== undefined && value.optionIds.length >= question.config.maximumSelections}<p class="selection-limit" role="status">Maximale Auswahl erreicht. Entferne zuerst eine Auswahl, um eine andere zu wählen.</p>{/if}
+		{#if question.config.maximumSelections !== undefined && value.optionIds.length >= question.config.maximumSelections}<p class="selection-limit" role="status">{language.t('Maximale Auswahl erreicht. Entferne zuerst eine Auswahl, um eine andere zu wählen.')}</p>{/if}
 	</fieldset>
 {:else if question.config.kind === 'matching' && value.kind === 'matching'}
 	<div class="matching-inputs">
 		{#each question.config.left as left (left.id)}
 			<label>{left.label}
 				<select disabled={disabled} value={value.pairs.find((pair) => pair.leftId === left.id)?.rightId ?? ''} onchange={(event) => setMatch(left.id, event.currentTarget.value)}>
-					<option value="">Bitte zuordnen</option>
+				<option value="">{language.t('Bitte zuordnen')}</option>
 					{#each question.config.right as right (right.id)}<option value={right.id}>{right.label}</option>{/each}
 				</select>
 			</label>
@@ -83,13 +85,13 @@
 		{#each value.itemIds as itemId, index (itemId)}
 			<li>
 				<span>{labelFor(itemId)}</span>
-				<button type="button" disabled={disabled || index === 0} aria-label={`${labelFor(itemId)} nach oben verschieben`} onclick={() => moveItem(index, -1)}>↑</button>
-				<button type="button" disabled={disabled || index === value.itemIds.length - 1} aria-label={`${labelFor(itemId)} nach unten verschieben`} onclick={() => moveItem(index, 1)}>↓</button>
+				<button type="button" disabled={disabled || index === 0} aria-label={language.t('{item} nach oben verschieben', { item: labelFor(itemId) })} onclick={() => moveItem(index, -1)}>↑</button>
+				<button type="button" disabled={disabled || index === value.itemIds.length - 1} aria-label={language.t('{item} nach unten verschieben', { item: labelFor(itemId) })} onclick={() => moveItem(index, 1)}>↓</button>
 			</li>
 		{/each}
 	</ol>
 {:else if question.config.kind === 'short_text' && value.kind === 'short_text'}
-	<label>Antwort
+	<label>{language.t('Antwort')}
 		{#if question.config.multiline}
 			<textarea disabled={disabled} maxlength={question.config.maximumLength} rows="4" value={value.text} oninput={(event) => onanswer({ kind: 'short_text', text: event.currentTarget.value })}></textarea>
 		{:else}

@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr';
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { findProfile } from '$lib/server/profiles';
 import { logServerError } from '$lib/server/logger.server';
+import { resolveLocale } from '$lib/i18n';
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const started = performance.now();
@@ -30,8 +31,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const isPublicRoute = ['/login', '/register', '/auth/', '/datenschutz', '/impressum', '/ki-bewertung'].some((path) => event.url.pathname === path || event.url.pathname.startsWith(path));
 	event.locals.profile = userId && !isPublicRoute ? await findProfile(userId) : null;
 
+	const locale = resolveLocale(event.cookies.get('locale'), event.request.headers.get('accept-language'));
 	const response = await resolve(event, {
-		filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
+		filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version',
+		transformPageChunk: ({ html }) => html.replace('%lang%', locale)
 	});
 	console.info(JSON.stringify({ level: 'info', type: 'hook_timing', operation: 'authentication', route: event.route.id ?? event.url.pathname, durationMs: Math.round((performance.now() - started) * 10) / 10, profileRead: Boolean(userId && !isPublicRoute) }));
 	return response;

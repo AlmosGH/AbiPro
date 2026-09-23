@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import Icon from '$lib/components/ui/Icon.svelte';
+	import LanguagePicker from '$lib/components/LanguagePicker.svelte';
+	import { getLanguageContext } from '$lib/i18n';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
+	const language = getLanguageContext();
 	const initials = $derived((data.profile.displayName ?? 'AK').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase());
 	const path = $derived(page.url.pathname);
-	const pageTitle = $derived(path === '/' ? 'Übersicht' : path.startsWith('/aufgaben') ? 'Aufgaben' : path.startsWith('/uben') ? 'Üben' : path.startsWith('/prufung') ? 'Prüfung' : path.startsWith('/profil') ? 'Fortschritt' : path.startsWith('/einstellungen') ? 'Einstellungen' : path.startsWith('/admin') ? 'Verwaltung' : 'AbiPro');
+	const pageTitle = $derived(language.t(path === '/' ? 'Übersicht' : path.startsWith('/aufgaben') ? 'Aufgaben' : path.startsWith('/uben') ? 'Üben' : path.startsWith('/prufung') ? 'Prüfung' : path.startsWith('/profil') ? 'Fortschritt' : path.startsWith('/einstellungen') ? 'Einstellungen' : path.startsWith('/admin') ? 'Verwaltung' : 'AbiPro'));
 	const learnerItems = [
 		{ href: '/aufgaben', label: 'Aufgaben', icon: 'tasks' as const },
 		{ href: '/uben', label: 'Üben', icon: 'practice' as const },
@@ -17,36 +20,37 @@
 
 <div class="app-shell">
 	<aside class="sidebar">
-		<a class="brand" href="/" aria-label="AbiPro Übersicht"><span aria-hidden="true">A</span><strong>AbiPro</strong></a>
-		<nav aria-label="Hauptnavigation" data-sveltekit-preload-data="false" data-sveltekit-preload-code="viewport">
-			<a href="/" aria-current={path === '/' ? 'page' : undefined}><Icon name="home" /><span>Übersicht</span></a>
+		<a class="brand" href="/" aria-label={language.t('AbiPro Übersicht')}><span aria-hidden="true">A</span><strong>AbiPro</strong></a>
+		<nav aria-label={language.t('Hauptnavigation')} data-sveltekit-preload-data="false" data-sveltekit-preload-code="viewport">
+			<a href="/" aria-current={path === '/' ? 'page' : undefined}><Icon name="home" /><span>{language.t('Übersicht')}</span></a>
 			{#each learnerItems as item (item.href)}
-				<a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span></a>
+				<a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}><Icon name={item.icon} /><span>{language.t(item.label)}</span></a>
 			{/each}
 		</nav>
 		{#if data.profile.role === 'admin'}
-			<div class="admin-area"><span>Administration</span><a href="/admin" aria-current={path.startsWith('/admin') ? 'page' : undefined}><Icon name="admin" /><b>Verwaltung</b></a></div>
+			<div class="admin-area"><span>{language.t('Administration')}</span><a href="/admin" aria-current={path.startsWith('/admin') ? 'page' : undefined}><Icon name="admin" /><b>{language.t('Verwaltung')}</b></a></div>
 		{/if}
-		<a class="settings-link" href="/einstellungen" aria-current={path.startsWith('/einstellungen') ? 'page' : undefined}><Icon name="settings" /><span>Einstellungen</span></a>
+		<a class="settings-link" href="/einstellungen" aria-current={path.startsWith('/einstellungen') ? 'page' : undefined}><Icon name="settings" /><span>{language.t('Einstellungen')}</span></a>
 	</aside>
 
 	<div class="workspace">
 		<header class="topbar">
 			<div><span class="mobile-mark">A</span><div><small>AbiPro</small><strong>{pageTitle}</strong></div></div>
 			<div class="top-actions">
-				<span class="sync"><i></i><span>Alles synchronisiert</span></span>
+				<LanguagePicker />
+				<span class="sync"><i></i><span>{language.t('Alles synchronisiert')}</span></span>
 				<details class="profile-menu">
-					<summary aria-label="Profilmenü öffnen"><span class="avatar">{initials}</span><span class="profile-name">{data.profile.displayName ?? 'Lernprofil'}</span><Icon name="chevron" size={16} /></summary>
-					<div><a href="/einstellungen"><Icon name="settings" size={18} />Einstellungen</a><form method="POST" action="/logout"><button type="submit">Abmelden</button></form></div>
+					<summary aria-label={language.t('Profilmenü öffnen')}><span class="avatar">{initials}</span><span class="profile-name">{data.profile.displayName ?? language.t('Lernprofil')}</span><Icon name="chevron" size={16} /></summary>
+					<div><a href="/einstellungen"><Icon name="settings" size={18} />{language.t('Einstellungen')}</a><form method="POST" action="/logout"><button type="submit">{language.t('Abmelden')}</button></form></div>
 				</details>
 			</div>
 		</header>
 		<div class="content">{@render children()}</div>
 	</div>
 
-	<nav class="bottom-nav" aria-label="Mobile Hauptnavigation" data-sveltekit-preload-data="false" data-sveltekit-preload-code="viewport">
+	<nav class="bottom-nav" aria-label={language.t('Mobile Hauptnavigation')} data-sveltekit-preload-data="false" data-sveltekit-preload-code="viewport">
 		{#each learnerItems as item (item.href)}
-			<a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}><Icon name={item.icon} /><span>{item.label}</span></a>
+			<a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}><Icon name={item.icon} /><span>{language.t(item.label)}</span></a>
 		{/each}
 	</nav>
 </div>

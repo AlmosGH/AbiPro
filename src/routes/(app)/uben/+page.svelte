@@ -2,48 +2,50 @@
 	import { enhance } from '$app/forms';
 	import { Button } from '$lib/components/ui';
 	import { PageHeader } from '$lib/components/page';
+	import { getLanguageContext } from '$lib/i18n';
 	import type { PageProps } from './$types';
 	let { data, form }: PageProps = $props();
+	const language = getLanguageContext();
 	let starting = $state(false);
 	const relativeTime = (value: Date | string) => {
 		const minutes = Math.max(1, Math.round((Date.now() - new Date(value).getTime()) / 60_000));
-		if (minutes < 60) return `vor ${minutes} Min.`;
+		if (minutes < 60) return language.t('vor {count} Min.', { count: minutes });
 		const hours = Math.round(minutes / 60);
-		return hours < 24 ? `vor ${hours} Std.` : `vor ${Math.round(hours / 24)} Tagen`;
+		return hours < 24 ? language.t('vor {count} Std.', { count: hours }) : language.t('vor {count} Tagen', { count: Math.round(hours / 24) });
 	};
 </script>
 
-<svelte:head><title>Üben – AbiPro</title></svelte:head>
+<svelte:head><title>{language.t('Üben')} – AbiPro</title></svelte:head>
 <main>
-	<PageHeader eyebrow="Training" title="Was möchtest du heute üben?" description="Starte sofort oder stelle dir eine gezielte Übung zusammen." />
+	<PageHeader eyebrow={language.t('Training')} title={language.t('Was möchtest du heute üben?')} description={language.t('Starte sofort oder stelle dir eine gezielte Übung zusammen.')} />
 	{#if form?.message}<p role="alert" class="form-error">{form.message}</p>{/if}
 
 	<section class="quick-start">
-		<div><span class="kicker">Schnellstart</span><h2>Direkt loslegen</h2><p>Wir wählen eine passende veröffentlichte Aufgabe für dich aus.</p></div>
-		<form method="POST" action="?/start" use:enhance={() => { starting = true; return async ({ update }) => { await update(); starting = false; }; }}><input type="hidden" name="taskSlug" value={data.requestedTaskSlug ?? ''} /><button disabled={starting}>{starting ? 'Wird vorbereitet …' : data.requestedTaskSlug ? 'Ausgewählte Aufgabe starten' : 'Quick Practice starten →'}</button></form>
+		<div><span class="kicker">{language.t('Schnellstart')}</span><h2>{language.t('Direkt loslegen')}</h2><p>{language.t('Wir wählen eine passende veröffentlichte Aufgabe für dich aus.')}</p></div>
+		<form method="POST" action="?/start" use:enhance={() => { starting = true; return async ({ update }) => { await update(); starting = false; }; }}><input type="hidden" name="taskSlug" value={data.requestedTaskSlug ?? ''} /><button disabled={starting}>{starting ? language.t('Wird vorbereitet …') : data.requestedTaskSlug ? language.t('Ausgewählte Aufgabe starten') : language.t('Quick Practice starten →')}</button></form>
 	</section>
 
 	{#if data.resumableAttempts.length}
-		<section><div class="section-heading"><div><span class="kicker">Weitermachen</span><h2>Offene Übungen</h2></div><span>{data.resumableAttempts.length}</span></div>
+		<section><div class="section-heading"><div><span class="kicker">{language.t('Weitermachen')}</span><h2>{language.t('Offene Übungen')}</h2></div><span>{data.resumableAttempts.length}</span></div>
 			<div class="resume-grid">{#each data.resumableAttempts as attempt (attempt.id)}
-				<a href={`/uben/${attempt.id}`} class="resume-card"><div><span>Zuletzt aktiv {relativeTime(attempt.lastActivityAt)}</span><h3>{attempt.title}</h3></div><div class="resume-progress"><div><i style={`width:${attempt.questionCount ? Math.round(100 * attempt.answeredCount / attempt.questionCount) : 0}%`}></i></div><strong>{attempt.answeredCount}/{attempt.questionCount}</strong></div><b>Fortsetzen →</b></a>
+				<a href={`/uben/${attempt.id}`} class="resume-card"><div><span>{language.t('Zuletzt aktiv {time}', { time: relativeTime(attempt.lastActivityAt) })}</span><h3>{attempt.title}</h3></div><div class="resume-progress"><div><i style={`width:${attempt.questionCount ? Math.round(100 * attempt.answeredCount / attempt.questionCount) : 0}%`}></i></div><strong>{attempt.answeredCount}/{attempt.questionCount}</strong></div><b>{language.t('Fortsetzen →')}</b></a>
 			{/each}</div>
 		</section>
 	{/if}
 
 	{#if data.recommendedTopic}
-		<section class="recommendation"><div><span class="kicker">Für dich empfohlen</span><h2>{data.recommendedTopic.name} festigen</h2><p>Dein aktueller Durchschnitt liegt hier bei {data.recommendedTopic.averagePercent} %. Eine kurze Wiederholung bringt jetzt am meisten.</p></div><form method="POST" action="?/start"><input type="hidden" name="topicId" value={data.recommendedTopic.id} /><input type="hidden" name="onlyNotPracticed" value="on" /><button>Empfohlene Übung starten</button></form></section>
+		<section class="recommendation"><div><span class="kicker">{language.t('Für dich empfohlen')}</span><h2>{language.t('{name} festigen', { name: data.recommendedTopic.name })}</h2><p>{language.t('Dein aktueller Durchschnitt liegt hier bei {percent} %. Eine kurze Wiederholung bringt jetzt am meisten.', { percent: data.recommendedTopic.averagePercent ?? 0 })}</p></div><form method="POST" action="?/start"><input type="hidden" name="topicId" value={data.recommendedTopic.id} /><input type="hidden" name="onlyNotPracticed" value="on" /><button>{language.t('Empfohlene Übung starten')}</button></form></section>
 	{/if}
 
 	<section class="custom-practice">
-		<div class="section-heading"><div><span class="kicker">Gezielt üben</span><h2>Übung zusammenstellen</h2></div></div>
+		<div class="section-heading"><div><span class="kicker">{language.t('Gezielt üben')}</span><h2>{language.t('Übung zusammenstellen')}</h2></div></div>
 		<form method="POST" action="?/start" class="choice-form">
-			<fieldset><legend>Sammlung</legend><div class="choice-cards"><label><input type="radio" name="origin" value="" checked /><span>Alle Sammlungen</span></label><label><input type="radio" name="origin" value="official" /><span>Offizielle Prüfungen</span></label><label><input type="radio" name="origin" value="ujkor" /><span>Újkor.hu Aufgaben</span></label></div></fieldset>
-			<fieldset><legend>Geschichte</legend><div class="choice-cards"><label><input type="radio" name="historyScope" value="" checked /><span>Ungarische und Weltgeschichte</span></label><label><input type="radio" name="historyScope" value="hungarian" /><span>Ungarische Geschichte</span></label><label><input type="radio" name="historyScope" value="global" /><span>Weltgeschichte</span></label></div></fieldset>
-			<fieldset><legend>Epoche</legend><div class="choice-cards"><label><input type="radio" name="periodId" value="" checked /><span>Alle Epochen</span></label>{#each data.periods as item (item.id)}<label><input type="radio" name="periodId" value={item.id} /><span>{item.name}</span></label>{/each}</div></fieldset>
-			<fieldset><legend>Thema</legend><div class="choice-cards"><label><input type="radio" name="topicId" value="" checked={!data.requestedTopicId} /><span>Alle Themen</span></label>{#each data.topics as item (item.id)}<label><input type="radio" name="topicId" value={item.id} checked={data.requestedTopicId === item.id} /><span>{item.name}</span></label>{/each}</div></fieldset>
-			<label class="unseen"><input type="checkbox" name="onlyNotPracticed" /><span><strong>Nur ungesehene Aufgaben</strong><small>Bereits geübte Aufgaben auslassen</small></span></label>
-			<div class="custom-action"><Button type="submit">Gezielte Übung starten</Button></div>
+			<fieldset><legend>{language.t('Sammlung')}</legend><div class="choice-cards"><label><input type="radio" name="origin" value="" checked /><span>{language.t('Alle Sammlungen')}</span></label><label><input type="radio" name="origin" value="official" /><span>{language.t('Offizielle Prüfungen')}</span></label><label><input type="radio" name="origin" value="ujkor" /><span>{language.t('Újkor.hu Aufgaben')}</span></label></div></fieldset>
+			<fieldset><legend>{language.t('Geschichte')}</legend><div class="choice-cards"><label><input type="radio" name="historyScope" value="" checked /><span>{language.t('Ungarische und Weltgeschichte')}</span></label><label><input type="radio" name="historyScope" value="hungarian" /><span>{language.t('Ungarische Geschichte')}</span></label><label><input type="radio" name="historyScope" value="global" /><span>{language.t('Weltgeschichte')}</span></label></div></fieldset>
+			<fieldset><legend>{language.t('Epoche')}</legend><div class="choice-cards"><label><input type="radio" name="periodId" value="" checked /><span>{language.t('Alle Epochen')}</span></label>{#each data.periods as item (item.id)}<label><input type="radio" name="periodId" value={item.id} /><span>{item.name}</span></label>{/each}</div></fieldset>
+			<fieldset><legend>{language.t('Thema')}</legend><div class="choice-cards"><label><input type="radio" name="topicId" value="" checked={!data.requestedTopicId} /><span>{language.t('Alle Themen')}</span></label>{#each data.topics as item (item.id)}<label><input type="radio" name="topicId" value={item.id} checked={data.requestedTopicId === item.id} /><span>{item.name}</span></label>{/each}</div></fieldset>
+			<label class="unseen"><input type="checkbox" name="onlyNotPracticed" /><span><strong>{language.t('Nur ungesehene Aufgaben')}</strong><small>{language.t('Bereits geübte Aufgaben auslassen')}</small></span></label>
+			<div class="custom-action"><Button type="submit">{language.t('Gezielte Übung starten')}</Button></div>
 		</form>
 	</section>
 </main>
